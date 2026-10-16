@@ -8,11 +8,13 @@ import {
   Download,
   Trash2,
   Shield,
-  Check
+  Check,
+  FlaskConical
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAccessibility, type TextScale } from '../context/AccessibilityContext'
 import { useAccessProfile } from '../context/AccessProfileContext'
+import { useDemoMode } from '../context/DemoModeContext'
 
 export const SettingsPage: React.FC = () => {
   const { t } = useTranslation()
@@ -30,6 +32,7 @@ export const SettingsPage: React.FC = () => {
   } = useAccessibility()
 
   const { resetProfile, exportProfileJSON, hasSavedProfile } = useAccessProfile()
+  const { allowed: demoAllowed, isOn: demoOn, setDemoMode } = useDemoMode()
   const [copiedNotification, setCopiedNotification] = useState(false)
   const [resetNotification, setResetNotification] = useState(false)
 
@@ -237,6 +240,31 @@ export const SettingsPage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {demoAllowed && (
+        <section className="saarthi-card" aria-labelledby="demo-heading">
+          <h2 id="demo-heading" style={{ fontSize: '1.15rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <FlaskConical size={20} color="var(--accent-primary)" aria-hidden="true" />
+            <span>Demo mode (development only)</span>
+          </h2>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+            Shows a fixed set of invented sample places across Pune — hospitals, bus stops, offices, courts and a transit hub — with a mix of verified,
+            reported, unknown and known-barrier evidence, so the app can be demonstrated without a live database. It never touches the real API, and a
+            banner stays on screen the whole time to say so. This section only appears in a development build or one built with demo mode explicitly
+            enabled; a production deployment that was not built that way never shows it, however this switch is set.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontWeight: 600 }}>{demoOn ? 'Demo mode is on' : 'Demo mode is off'}</span>
+            <input
+              type="checkbox"
+              checked={demoOn}
+              onChange={e => setDemoMode(e.target.checked)}
+              style={{ width: '24px', height: '24px' }}
+              aria-label="Toggle demo mode"
+            />
+          </div>
+        </section>
+      )}
     </div>
   )
 }

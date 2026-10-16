@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
-  ArrowLeft,
   Building2,
   Bus,
   ClipboardCheck,
@@ -24,7 +23,7 @@ import {
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { getPlaceReadinessCard, searchPlaces, type PlaceSummary, type ReadinessCardResponse } from '../services/api'
+import { searchPlaces, type PlaceSummary } from '../services/api'
 import {
   EVIDENCE_STATE_INFO,
   EVIDENCE_STATES,
@@ -36,9 +35,8 @@ import {
 } from '../services/evidence'
 import { needLabel } from '../services/requirements'
 import { MapLibreView } from '../components/map/MapLibreView'
-import { ServiceReadinessCard } from '../components/readiness/ServiceReadinessCard'
+import { PlaceQuickCard } from '../components/map/PlaceQuickCard'
 import { EvidenceBadge } from '../components/common/EvidenceBadge'
-import { ReportIssueModal } from '../components/report/ReportIssueModal'
 import { SpeechService } from '../services/speech'
 import { useAccessProfile } from '../context/AccessProfileContext'
 import { useProfileModal } from '../context/ProfileModalContext'
@@ -77,7 +75,7 @@ function typeLabel(type: string): string {
 export const HomePage: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const { profile, thresholds, hasSavedProfile } = useAccessProfile()
+  const { profile, hasSavedProfile } = useAccessProfile()
   const { openProfileModal } = useProfileModal()
 
   const [searchQuery, setSearchQuery] = useState('')
@@ -96,21 +94,15 @@ export const HomePage: React.FC = () => {
 
   const [isListening, setIsListening] = useState(false)
   const [voiceError, setVoiceError] = useState<string | null>(null)
-  const [mobileView, setMobileView] = useState<'list' | 'map'>('list')
+  const [mobileView, setMobileView] = useState<'list' | 'map'>('map')
+  const [searchFocused, setSearchFocused] = useState(false)
 
   const [selectedPlace, setSelectedPlace] = useState<PlaceSummary | null>(null)
-  const [readinessCard, setReadinessCard] = useState<ReadinessCardResponse | null>(null)
-  const [isCardLoading, setIsCardLoading] = useState(false)
-  const [cardError, setCardError] = useState<string | null>(null)
-  const [cardRetry, setCardRetry] = useState(0)
-
-  const [isReportOpen, setIsReportOpen] = useState(false)
-  const [reportFeatureId, setReportFeatureId] = useState<string | undefined>(undefined)
 
   const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300)
+    const timer = window.setTimeout(() => setDebouncedQuery(searchQuery.trim()), 250)
     return () => window.clearTimeout(timer)
   }, [searchQuery])
 
@@ -128,7 +120,7 @@ export const HomePage: React.FC = () => {
         near: nearParam,
         evidence_state: evidenceFilter || undefined,
         fresh_days: freshDays || undefined,
-        limit: 30
+        limit: 40
       },
       controller.signal
     )
@@ -145,42 +137,6 @@ export const HomePage: React.FC = () => {
 
     return () => controller.abort()
   }, [debouncedQuery, category, nearParam, evidenceFilter, freshDays, retryKey])
-
-  // The readiness card is evaluated against the saved needs and any numeric limits the person changed.
-  const needsKey = profile.activeNeedCodes.join(',')
-  const thresholdKey = JSON.stringify(thresholds)
-  useEffect(() => {
-    if (!selectedPlace) {
-      setReadinessCard(null)
-      setCardError(null)
-      return
-    }
-    if (profile.activeNeedCodes.length === 0) {
-      setReadinessCard(null)
-      setCardError(null)
-      setIsCardLoading(false)
-      return
-    }
-
-    const controller = { cancelled: false }
-    setIsCardLoading(true)
-    setCardError(null)
-    getPlaceReadinessCard(selectedPlace.id, profile.activeNeedCodes, thresholds)
-      .then(card => {
-        if (controller.cancelled) return
-        setReadinessCard(card)
-        setIsCardLoading(false)
-      })
-      .catch((err: Error) => {
-        if (controller.cancelled) return
-        setCardError(err.message || 'The readiness check failed.')
-        setIsCardLoading(false)
-      })
-    return () => {
-      controller.cancelled = true
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPlace, needsKey, thresholdKey, cardRetry])
 
   const filtersActive = Boolean(debouncedQuery || category || evidenceFilter || freshDays)
   const advancedFilterCount = (evidenceFilter ? 1 : 0) + (freshDays ? 1 : 0)
@@ -237,7 +193,7 @@ export const HomePage: React.FC = () => {
 
   const selectPlace = (place: PlaceSummary) => {
     setSelectedPlace(place)
-    setMobileView('list')
+    setMobileView('map')
   }
 
   const mapCenter = useMemo<[number, number]>(() => {
@@ -247,6 +203,8 @@ export const HomePage: React.FC = () => {
   }, [selectedPlace, location])
 
   const needChips = profile.activeNeedCodes
+  const suggestions = searchQuery.trim().length > 0 ? places.slice(0, 5) : []
+  const showSuggestions = searchFocused && suggestions.length > 0
 
   return (
     <div className="page explore-page">
@@ -282,6 +240,7 @@ export const HomePage: React.FC = () => {
           onSubmit={e => {
             e.preventDefault()
             setDebouncedQuery(searchQuery.trim())
+            setSearchFocused(false)
           }}
         >
           <div className="search-field">
@@ -292,6 +251,8 @@ export const HomePage: React.FC = () => {
               id="places-search-input"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => window.setTimeout(() => setSearchFocused(false), 150)}
               placeholder="Search hospitals, bus stops, courts, offices…"
               aria-label="Search places by name, department or address"
               autoComplete="off"
@@ -300,6 +261,30 @@ export const HomePage: React.FC = () => {
               <button type="button" className="search-clear" onClick={() => setSearchQuery('')} aria-label="Clear search text">
                 <X size={16} aria-hidden="true" />
               </button>
+            )}
+
+            {showSuggestions && (
+              <ul className="suggestion-dropdown" aria-label="Matching places">
+                {suggestions.map(p => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      onMouseDown={e => {
+                        e.preventDefault()
+                        selectPlace(p)
+                        setSearchQuery(p.name)
+                        setSearchFocused(false)
+                      }}
+                    >
+                      <span className="combobox-name">{p.name}</span>
+                      <span className="text-muted text-sm">
+                        {typeLabel(p.type)}
+                        {p.address ? ` · ${p.address}` : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 
@@ -427,186 +412,33 @@ export const HomePage: React.FC = () => {
       </section>
 
       <div className="view-toggle" role="group" aria-label="Show list or map">
-        <button type="button" className={`segment${mobileView === 'list' ? ' is-active' : ''}`} aria-pressed={mobileView === 'list'} onClick={() => setMobileView('list')}>
-          <List size={15} aria-hidden="true" /> List
-        </button>
         <button type="button" className={`segment${mobileView === 'map' ? ' is-active' : ''}`} aria-pressed={mobileView === 'map'} onClick={() => setMobileView('map')}>
           <MapIcon size={15} aria-hidden="true" /> Map
+        </button>
+        <button type="button" className={`segment${mobileView === 'list' ? ' is-active' : ''}`} aria-pressed={mobileView === 'list'} onClick={() => setMobileView('list')}>
+          <List size={15} aria-hidden="true" /> List
         </button>
       </div>
 
       <div className={`explore-layout view-${mobileView}`}>
-        <div className="results-pane">
-          {selectedPlace ? (
-            <div className="detail-pane">
-              <div className="detail-actions">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSelectedPlace(null)}>
-                  <ArrowLeft size={15} aria-hidden="true" />
-                  <span>Back to results ({places.length})</span>
-                </button>
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/plan?dest=${selectedPlace.id}`)}>
-                  <Navigation size={15} aria-hidden="true" />
-                  <span>Plan journey here</span>
-                </button>
-              </div>
-
-              {profile.activeNeedCodes.length === 0 ? (
-                <div className="saarthi-card empty-state">
-                  <UserCheck size={32} className="empty-state-icon" aria-hidden="true" />
-                  <h2 className="empty-state-title">Choose a need to check this place against</h2>
-                  <p className="empty-state-desc">
-                    Without at least one need that has measurable rules, SAARTHI cannot assess {selectedPlace.name}. Nothing is assumed.
-                  </p>
-                  <button type="button" className="btn btn-primary" onClick={openProfileModal}>
-                    Open access profile
-                  </button>
-                </div>
-              ) : cardError ? (
-                <div className="saarthi-card empty-state empty-state-warn" role="alert">
-                  <AlertTriangle size={32} className="empty-state-icon" aria-hidden="true" />
-                  <h2 className="empty-state-title">The check for {selectedPlace.name} did not complete</h2>
-                  <p className="empty-state-desc">{cardError}</p>
-                  <button type="button" className="btn btn-primary" onClick={() => setCardRetry(n => n + 1)}>
-                    <RotateCcw size={15} aria-hidden="true" /> Try again
-                  </button>
-                </div>
-              ) : isCardLoading || !readinessCard ? (
-                <div className="saarthi-card" aria-busy="true">
-                  <p className="text-muted" role="status">
-                    Checking the evidence for <strong>{selectedPlace.name}</strong>…
-                  </p>
-                  <div className="skeleton skeleton-line w-60" />
-                  <div className="skeleton skeleton-block" />
-                  <div className="skeleton skeleton-block" />
-                </div>
-              ) : (
-                <ServiceReadinessCard
-                  card={readinessCard}
-                  onReportIssue={featureId => {
-                    setReportFeatureId(featureId)
-                    setIsReportOpen(true)
-                  }}
-                />
-              )}
-            </div>
-          ) : (
-            <div className="saarthi-card results-card">
-              <div className="results-head">
-                <h2 className="section-title">
-                  {isLoading && !hasSearched ? 'Looking for places…' : `${places.length} ${places.length === 1 ? 'place' : 'places'}`}
-                  {filtersActive && !isLoading ? ' match your search' : ''}
-                </h2>
-                <p className="text-muted text-sm" role="status" aria-live="polite">
-                  {isLoading ? 'Updating…' : location.status === 'on' ? 'Nearest first' : ''}
-                </p>
-              </div>
-
-              {isLoading && places.length === 0 ? (
-                <ul className="places-skeleton" aria-busy="true" aria-label="Loading places">
-                  {[0, 1, 2, 3].map(i => (
-                    <li key={i} className="place-card">
-                      <div className="skeleton skeleton-line w-40" />
-                      <div className="skeleton skeleton-line w-80" />
-                      <div className="skeleton skeleton-line w-60" />
-                    </li>
-                  ))}
-                </ul>
-              ) : fetchError ? (
-                <div className="empty-state empty-state-warn" role="alert">
-                  <AlertTriangle size={32} className="empty-state-icon" aria-hidden="true" />
-                  <h3 className="empty-state-title">Places could not be loaded</h3>
-                  <p className="empty-state-desc">{fetchError}</p>
-                  <p className="text-muted text-sm">No placeholder places are shown. If you run SAARTHI yourself, check that the API and database are running.</p>
-                  <button type="button" className="btn btn-primary" onClick={() => setRetryKey(k => k + 1)}>
-                    <RotateCcw size={15} aria-hidden="true" /> Try again
-                  </button>
-                </div>
-              ) : places.length === 0 ? (
-                <div className="empty-state">
-                  <MapPin size={32} className="empty-state-icon" aria-hidden="true" />
-                  <h3 className="empty-state-title">{filtersActive ? 'No places match these filters' : 'No places have been added yet'}</h3>
-                  <p className="empty-state-desc">
-                    {filtersActive
-                      ? 'Nothing in the registry matches. Loosen the filters, or search for a different name.'
-                      : 'The registry has no places to show. SAARTHI never invents places, so the list stays empty until real ones are added.'}
-                  </p>
-                  <div className="empty-actions">
-                    {filtersActive && (
-                      <button type="button" className="btn btn-primary" onClick={handleClearFilters}>
-                        <RotateCcw size={15} aria-hidden="true" /> Clear filters
-                      </button>
-                    )}
-                    <button type="button" className="btn btn-secondary" onClick={handleSearchAgain}>
-                      <Search size={15} aria-hidden="true" /> Search again
-                    </button>
-                    <Link to="/auditor" className="btn btn-secondary">
-                      <ClipboardCheck size={15} aria-hidden="true" /> Start an audit
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <ul className="places-list" aria-label="Places">
-                  {places.map(place => {
-                    const missing = describeMissingInformation(place.evidence)
-                    const barriers = place.evidence?.barrier_count ?? 0
-                    return (
-                      <li key={place.id} className="place-card">
-                        <div className="place-card-top">
-                          <span className="place-card-icon">{TYPE_ICON[place.type] ?? <Building2 size={18} aria-hidden="true" />}</span>
-                          <div className="place-card-title">
-                            <span className="eyebrow">{typeLabel(place.type)}</span>
-                            <h3>{place.name}</h3>
-                            <p className="text-secondary text-sm">{place.address}</p>
-                          </div>
-                          {place.distance_m !== undefined && <span className="tag">{formatDistance(place.distance_m)}</span>}
-                        </div>
-
-                        <div className="place-card-evidence">
-                          {place.evidence ? <EvidenceBadge state={place.evidence.state} /> : <span className="tag">Evidence details unavailable</span>}
-                          <span className="text-muted text-sm">{describeFreshness(place.evidence)}</span>
-                        </div>
-
-                        <ul className="fact-list text-sm">
-                          <li>{describeEvidenceCoverage(place.evidence)}</li>
-                          {barriers > 0 && (
-                            <li className="fact-barrier">
-                              {barriers} known barrier{barriers === 1 ? '' : 's'} on record
-                            </li>
-                          )}
-                          {missing.map((m, i) => (
-                            <li key={i} className="fact-missing">
-                              {m.text}
-                            </li>
-                          ))}
-                        </ul>
-
-                        <div className="card-actions">
-                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => selectPlace(place)} aria-label={`Inspect evidence for ${place.name}`}>
-                            <Search size={14} aria-hidden="true" />
-                            <span>Inspect evidence</span>
-                          </button>
-                          <Link to={`/plan?dest=${place.id}`} className="btn btn-primary btn-sm" aria-label={`Plan a journey to ${place.name}`}>
-                            <Navigation size={14} aria-hidden="true" />
-                            <span>Plan journey</span>
-                          </Link>
-                        </div>
-                      </li>
-                    )
-                  })}
-                </ul>
-              )}
-            </div>
-          )}
-        </div>
-
         <div className="map-pane">
-          <MapLibreView
-            center={mapCenter}
-            zoom={selectedPlace ? 15 : 13}
-            places={places}
-            selectedPlaceId={selectedPlace?.id}
-            onSelectPlace={selectPlace}
-          />
+          <div className="map-stage">
+            <MapLibreView
+              center={mapCenter}
+              zoom={selectedPlace ? 15 : 13}
+              places={places}
+              selectedPlaceId={selectedPlace?.id}
+              onSelectPlace={selectPlace}
+            />
+            {selectedPlace && (
+              <PlaceQuickCard
+                place={selectedPlace}
+                onClose={() => setSelectedPlace(null)}
+                onInspect={() => navigate(`/places/${selectedPlace.id}`)}
+                onPlanJourney={() => navigate(`/plan?dest=${selectedPlace.id}`)}
+              />
+            )}
+          </div>
           <div className="map-legend" aria-label="Map key: marker colour and symbol show the evidence on file, not accessibility">
             {EVIDENCE_STATES.map(state => (
               <span key={state} className={`legend-item state-${state}`}>
@@ -617,20 +449,131 @@ export const HomePage: React.FC = () => {
               </span>
             ))}
           </div>
+          <p className="text-muted text-sm">
+            <span className="sr-only">Map markers are not keyboard-navigable yet. </span>Use the list to reach every place with a keyboard or screen reader.
+          </p>
           <p className="text-muted text-sm">{t('app.attribution').split('|')[0]}</p>
         </div>
-      </div>
 
-      <ReportIssueModal
-        isOpen={isReportOpen}
-        onClose={() => {
-          setIsReportOpen(false)
-          setReportFeatureId(undefined)
-        }}
-        placeId={selectedPlace?.id}
-        placeName={selectedPlace?.name}
-        featureId={reportFeatureId}
-      />
+        <div className="results-pane">
+          <div className="saarthi-card results-card">
+            <div className="results-head">
+              <h2 className="section-title">
+                {isLoading && !hasSearched ? 'Looking for places…' : `${places.length} ${places.length === 1 ? 'place' : 'places'}`}
+                {filtersActive && !isLoading ? ' match your search' : ''}
+              </h2>
+              <p className="text-muted text-sm" role="status" aria-live="polite">
+                {isLoading ? 'Updating…' : location.status === 'on' ? 'Nearest first' : ''}
+              </p>
+            </div>
+
+            {isLoading && places.length === 0 ? (
+              <ul className="places-skeleton" aria-busy="true" aria-label="Loading places">
+                {[0, 1, 2, 3].map(i => (
+                  <li key={i} className="place-card">
+                    <div className="skeleton skeleton-line w-40" />
+                    <div className="skeleton skeleton-line w-80" />
+                    <div className="skeleton skeleton-line w-60" />
+                  </li>
+                ))}
+              </ul>
+            ) : fetchError ? (
+              <div className="empty-state empty-state-warn" role="alert">
+                <AlertTriangle size={32} className="empty-state-icon" aria-hidden="true" />
+                <h3 className="empty-state-title">Places could not be loaded</h3>
+                <p className="empty-state-desc">{fetchError}</p>
+                <p className="text-muted text-sm">No placeholder places are shown. If you run SAARTHI yourself, check that the API and database are running.</p>
+                <button type="button" className="btn btn-primary" onClick={() => setRetryKey(k => k + 1)}>
+                  <RotateCcw size={15} aria-hidden="true" /> Try again
+                </button>
+              </div>
+            ) : places.length === 0 ? (
+              <div className="empty-state">
+                <MapPin size={32} className="empty-state-icon" aria-hidden="true" />
+                <h3 className="empty-state-title">{filtersActive ? 'No places match these filters' : 'No places have been added yet'}</h3>
+                <p className="empty-state-desc">
+                  {filtersActive
+                    ? 'Nothing in the registry matches. Loosen the filters, or search for a different name.'
+                    : 'The registry has no places to show. SAARTHI never invents places, so the list stays empty until real ones are added.'}
+                </p>
+                <div className="empty-actions">
+                  {filtersActive && (
+                    <button type="button" className="btn btn-primary" onClick={handleClearFilters}>
+                      <RotateCcw size={15} aria-hidden="true" /> Clear filters
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-secondary" onClick={handleSearchAgain}>
+                    <Search size={15} aria-hidden="true" /> Search again
+                  </button>
+                  <Link to="/auditor" className="btn btn-secondary">
+                    <ClipboardCheck size={15} aria-hidden="true" /> Start an audit
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <ul className="places-list" aria-label="Places">
+                {places.map(place => {
+                  const missing = describeMissingInformation(place.evidence)
+                  const barriers = place.evidence?.barrier_count ?? 0
+                  const isSelected = place.id === selectedPlace?.id
+                  return (
+                    <li key={place.id} className={`place-card${isSelected ? ' is-selected' : ''}`}>
+                      <div className="place-card-top">
+                        <span className="place-card-icon">{TYPE_ICON[place.type] ?? <Building2 size={18} aria-hidden="true" />}</span>
+                        <div className="place-card-title">
+                          <span className="eyebrow">{typeLabel(place.type)}</span>
+                          <h3>{place.name}</h3>
+                          <p className="text-secondary text-sm">{place.address}</p>
+                        </div>
+                        {place.distance_m !== undefined && <span className="tag">{formatDistance(place.distance_m)}</span>}
+                      </div>
+
+                      <div className="place-card-evidence">
+                        {place.evidence ? <EvidenceBadge state={place.evidence.state} /> : <span className="tag">Evidence details unavailable</span>}
+                        <span className="text-muted text-sm">{describeFreshness(place.evidence)}</span>
+                      </div>
+
+                      <ul className="fact-list text-sm">
+                        <li>{describeEvidenceCoverage(place.evidence)}</li>
+                        {barriers > 0 && (
+                          <li className="fact-barrier">
+                            {barriers} known barrier{barriers === 1 ? '' : 's'} on record
+                          </li>
+                        )}
+                        {missing.map((m, i) => (
+                          <li key={i} className="fact-missing">
+                            {m.text}
+                          </li>
+                        ))}
+                      </ul>
+
+                      <div className="card-actions">
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => selectPlace(place)} aria-label={`Show ${place.name} on the map`}>
+                          <MapIcon size={14} aria-hidden="true" />
+                          <span>Show on map</span>
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => navigate(`/places/${place.id}`)}
+                          aria-label={`Inspect evidence for ${place.name}`}
+                        >
+                          <Search size={14} aria-hidden="true" />
+                          <span>Inspect evidence</span>
+                        </button>
+                        <Link to={`/plan?dest=${place.id}`} className="btn btn-primary btn-sm" aria-label={`Plan a journey to ${place.name}`}>
+                          <Navigation size={14} aria-hidden="true" />
+                          <span>Plan journey</span>
+                        </Link>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

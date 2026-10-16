@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, Check, LocateFixed, MapPin, Navigation, RotateCcw, UserCheck } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, ArrowDownUp, Check, LocateFixed, MapPin, Navigation, RotateCcw, Search, UserCheck } from 'lucide-react'
 import { getPlace, planJourney, type JourneyPlanResponse, type PlaceSummary } from '../services/api'
 import { needLabel } from '../services/requirements'
 import { MapLibreView } from '../components/map/MapLibreView'
 import { PlaceCombobox } from '../components/common/PlaceCombobox'
+import { RouteSummaryCard } from '../components/passport/RouteSummaryCard'
 import { JourneyPassportCard } from '../components/passport/JourneyPassportCard'
 import { GuidedNavigationHUD } from '../components/navigation/GuidedNavigationHUD'
 import { ReportIssueModal } from '../components/report/ReportIssueModal'
@@ -41,6 +42,7 @@ export const JourneyPlanPage: React.FC = () => {
   const [isNavigating, setIsNavigating] = useState(false)
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [reportCommentDefault, setReportCommentDefault] = useState('')
+  const [needsPanelOpen, setNeedsPanelOpen] = useState(false)
 
   useEffect(() => {
     if (!destParam) return
@@ -146,19 +148,29 @@ export const JourneyPlanPage: React.FC = () => {
         </p>
       </header>
 
-      <section className="saarthi-card plan-form" aria-labelledby="plan-journey-heading">
-        <ol className="plan-steps">
-          <li className="plan-step">
-            <span className="plan-step-number" aria-hidden="true">1</span>
-            <div className="plan-step-body">
-              <h2 className="plan-step-title">Where are you starting?</h2>
-              <p className="text-sm" id="origin-summary">
-                <MapPin size={14} aria-hidden="true" /> <strong>{originLabel}</strong>
-                {originMode === 'default' && <span className="text-muted"> · change it below</span>}
-              </p>
-              <div className="origin-actions">
-                <button type="button" className="btn btn-secondary btn-sm" onClick={useGps} disabled={gpsStatus === 'locating'}>
-                  <LocateFixed size={15} aria-hidden="true" />
+      <section className="plan-nav-panel" aria-labelledby="plan-journey-heading">
+        <div className="plan-nav-fields">
+          <div className="plan-nav-rail" aria-hidden="true">
+            <span className="plan-nav-dot origin" />
+            <span className="plan-nav-line" />
+            <span className="plan-nav-dot destination" />
+          </div>
+          <div className="plan-nav-inputs">
+            <div className="plan-nav-field">
+              <PlaceCombobox
+                id="origin-search"
+                label="Start"
+                placeholder={originLabel}
+                initialText={originMode === 'default' ? '' : undefined}
+                selected={originPlace}
+                onSelect={p => {
+                  setOriginPlace(p)
+                  setOriginMode(p ? 'place' : 'default')
+                }}
+              />
+              <div className="plan-nav-gps-row">
+                <button type="button" className="btn btn-ghost btn-sm plan-nav-gps" onClick={useGps} disabled={gpsStatus === 'locating'}>
+                  <LocateFixed size={14} aria-hidden="true" />
                   <span>{gpsStatus === 'locating' ? 'Locating…' : 'Use my location'}</span>
                 </button>
                 {originMode !== 'default' && (
@@ -168,6 +180,7 @@ export const JourneyPlanPage: React.FC = () => {
                     onClick={() => {
                       setOriginMode('default')
                       setOriginPlace(null)
+                      setGpsPoint(null)
                     }}
                   >
                     <RotateCcw size={14} aria-hidden="true" />
@@ -175,33 +188,14 @@ export const JourneyPlanPage: React.FC = () => {
                   </button>
                 )}
               </div>
-              {gpsStatus === 'failed' && (
-                <p className="callout callout-note" role="status">
-                  <MapPin size={16} aria-hidden="true" />
-                  <span>{gpsMessage}</span>
-                </p>
-              )}
-              <PlaceCombobox
-                id="origin-search"
-                label="Or start from a place"
-                placeholder="Search a stop, station or building…"
-                selected={originPlace}
-                onSelect={p => {
-                  setOriginPlace(p)
-                  setOriginMode(p ? 'place' : 'default')
-                }}
-              />
+              {originMode === 'default' && <p className="text-muted text-sm">{DEFAULT_START_LABEL} · search above or use your location to change it</p>}
+              {originMode === 'gps' && <p className="text-muted text-sm">Your current location</p>}
             </div>
-          </li>
 
-          <li className="plan-step">
-            <span className="plan-step-number" aria-hidden="true">2</span>
-            <div className="plan-step-body">
-              <h2 className="plan-step-title">Where do you need to go?</h2>
+            <div className="plan-nav-field">
               <PlaceCombobox
                 id="destination-search"
                 label="Destination"
-                hint="Hospital, court, office, bus stop or other public service"
                 placeholder="Search for the place you are going to…"
                 selected={destination}
                 onSelect={setDestination}
@@ -213,44 +207,49 @@ export const JourneyPlanPage: React.FC = () => {
                 </p>
               )}
             </div>
-          </li>
-
-          <li className="plan-step">
-            <span className="plan-step-number" aria-hidden="true">3</span>
-            <div className="plan-step-body">
-              <h2 className="plan-step-title">What does the journey need to work for?</h2>
-              {hasNeeds ? (
-                <p className="text-sm needs-line">
-                  {profile.activeNeedCodes.map(code => (
-                    <span key={code} className="pill pill-neutral">
-                      {needLabel(code)}
-                    </span>
-                  ))}
-                  {Object.keys(thresholds).length > 0 && <span className="pill pill-brand">your own limits</span>}
-                  {!profile.savedByUser && <span className="text-muted">(starting default, not saved)</span>}
-                </p>
-              ) : (
-                <p className="callout callout-warn">
-                  <AlertTriangle size={16} aria-hidden="true" />
-                  <span>No need with measurable rules is selected, so there is nothing SAARTHI can check.</span>
-                </p>
-              )}
-              <button type="button" className="btn btn-secondary btn-sm" onClick={openProfileModal}>
-                <UserCheck size={15} aria-hidden="true" />
-                <span>{hasNeeds ? 'Edit access profile' : 'Set up access profile'}</span>
-              </button>
-              <p className="text-muted text-sm">Your profile stays on this device. Only the need codes and any limits you changed are sent.</p>
-            </div>
-          </li>
-        </ol>
-
-        <div className="plan-submit">
-          <button type="button" className="btn btn-primary btn-lg" onClick={handlePlanJourney} disabled={!canEvaluate}>
-            {isLoading ? 'Checking evidence…' : 'Check journey readiness'}
-          </button>
-          {!destination && <span className="text-muted text-sm">Choose a destination to continue.</span>}
+          </div>
         </div>
 
+        <div className="plan-nav-footer">
+          <button type="button" className="needs-strip" onClick={() => setNeedsPanelOpen(o => !o)} aria-expanded={needsPanelOpen}>
+            <UserCheck size={15} aria-hidden="true" />
+            {hasNeeds ? (
+              <>
+                <span>Checked for:</span>
+                {profile.activeNeedCodes.map(code => (
+                  <span key={code} className="pill pill-neutral">
+                    {needLabel(code)}
+                  </span>
+                ))}
+              </>
+            ) : (
+              <span className="text-danger">No checkable needs selected</span>
+            )}
+          </button>
+          <button type="button" className="btn btn-primary plan-nav-submit" onClick={handlePlanJourney} disabled={!canEvaluate}>
+            {isLoading ? 'Checking evidence…' : 'Check journey readiness'}
+          </button>
+        </div>
+
+        {needsPanelOpen && (
+          <div className="callout callout-note">
+            <UserCheck size={16} aria-hidden="true" />
+            <span>
+              Your profile stays on this device; only the need codes and any limits you changed are sent.{' '}
+              <button type="button" className="link-btn" onClick={openProfileModal}>
+                {hasNeeds ? 'Edit access profile' : 'Set up access profile'}
+              </button>
+            </span>
+          </div>
+        )}
+
+        {!hasNeeds && !needsPanelOpen && (
+          <p className="callout callout-warn">
+            <AlertTriangle size={16} aria-hidden="true" />
+            <span>No need with measurable rules is selected, so there is nothing SAARTHI can check yet.</span>
+          </p>
+        )}
+        {!destination && <p className="text-muted text-sm">Choose a destination to continue.</p>}
         {errorMsg && (
           <p role="alert" className="callout callout-danger">
             <AlertTriangle size={16} aria-hidden="true" />
@@ -261,21 +260,20 @@ export const JourneyPlanPage: React.FC = () => {
 
       <div className="explore-layout plan-layout">
         <div className="map-pane">
-          <MapLibreView
-            center={destination ? [destination.longitude, destination.latitude] : [origin.longitude, origin.latitude]}
-            zoom={15}
-            origin={origin}
-            destination={destination ? { latitude: destination.latitude, longitude: destination.longitude, name: destination.name } : undefined}
-            routeGeometry={plan?.route_geometry}
-            routeKind={plan?.route_kind}
-          />
-          {plan && (
-            <p className="text-muted text-sm">
-              {plan.route_kind === 'pedestrian_network'
-                ? 'The purple line follows mapped walking paths.'
-                : 'The dashed line is a straight line between the points. It is not a walkable route.'}
-            </p>
-          )}
+          <div className="map-stage">
+            <MapLibreView
+              center={destination ? [destination.longitude, destination.latitude] : [origin.longitude, origin.latitude]}
+              zoom={15}
+              origin={origin}
+              destination={destination ? { latitude: destination.latitude, longitude: destination.longitude, name: destination.name } : undefined}
+              routeGeometry={plan?.route_geometry}
+              routeKind={plan?.route_kind}
+              disableClustering
+            />
+          </div>
+          <p className="text-muted text-sm">
+            <MapPin size={13} aria-hidden="true" /> {originLabel} <ArrowDownUp size={12} aria-hidden="true" /> {destination ? destination.name : 'choose a destination'}
+          </p>
         </div>
 
         <div className="results-pane" aria-live="polite" aria-busy={isLoading}>
@@ -287,15 +285,24 @@ export const JourneyPlanPage: React.FC = () => {
               <div className="skeleton skeleton-block" />
             </div>
           ) : plan ? (
-            <JourneyPassportCard
-              plan={plan}
-              onStartNavigation={() => setIsNavigating(true)}
-              onRequestAssistance={() => {
-                setReportCommentDefault(`Assistance request for ${plan.destination_name}`)
-                setIsReportOpen(true)
-              }}
-              onReportBarrier={handleHitBarrier}
-            />
+            <div className="plan-results">
+              <RouteSummaryCard plan={plan} />
+              <JourneyPassportCard
+                plan={plan}
+                onStartNavigation={() => setIsNavigating(true)}
+                onRequestAssistance={() => {
+                  setReportCommentDefault(`Assistance request for ${plan.destination_name}`)
+                  setIsReportOpen(true)
+                }}
+                onReportBarrier={handleHitBarrier}
+              />
+              {destination && (
+                <Link to={`/places/${destination.id}`} className="btn btn-secondary btn-sm">
+                  <Search size={14} aria-hidden="true" />
+                  <span>View full facility details for {destination.name}</span>
+                </Link>
+              )}
+            </div>
           ) : (
             <div className="saarthi-card empty-state">
               <Navigation size={36} className="empty-state-icon" aria-hidden="true" />

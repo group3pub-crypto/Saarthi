@@ -10,6 +10,13 @@ import {
   type ReadinessCardResponse,
   type RequirementsResponse
 } from './normalize.ts'
+import { isDemoModeOn } from './demoMode.ts'
+import { DEMO_REQUIREMENTS_RESPONSE, demoGetJourneyPlan, demoGetPlace, demoGetReadinessCard, demoSearchPlaces } from './demoFixtures.ts'
+
+/** A short, randomised delay so demo mode feels like a real round trip rather than instant. */
+function demoDelay<T>(value: T): Promise<T> {
+  return new Promise(resolve => window.setTimeout(() => resolve(value), 180 + Math.random() * 220))
+}
 
 export type {
   FeatureCard,
@@ -50,6 +57,8 @@ export async function searchPlaces(params: {
   evidence_state?: EvidenceState
   fresh_days?: number
 }, signal?: AbortSignal): Promise<PlaceSummary[]> {
+  if (isDemoModeOn()) return demoDelay(demoSearchPlaces(params))
+
   const query = new URLSearchParams()
   if (params.q) query.set('q', params.q)
   if (params.type) query.set('type', params.type)
@@ -67,6 +76,12 @@ export async function searchPlaces(params: {
 }
 
 export async function getPlace(placeId: string, signal?: AbortSignal): Promise<PlaceSummary> {
+  if (isDemoModeOn()) {
+    const place = demoGetPlace(placeId)
+    if (!place) throw new Error('That demo place was not found.')
+    return demoDelay(place)
+  }
+
   const res = await fetch(`${API_BASE}/places/${encodeURIComponent(placeId)}`, { signal })
   if (!res.ok) {
     throw new Error(res.status === 404 ? 'That place was not found.' : errorMessage(await readJson(res), `Failed to load place (${res.status})`))
@@ -86,6 +101,12 @@ export async function getPlaceReadinessCard(
   needs: string[],
   thresholds?: ThresholdPreferences
 ): Promise<ReadinessCardResponse> {
+  if (isDemoModeOn()) {
+    const card = demoGetReadinessCard(placeId)
+    if (!card) throw new Error('No demo readiness data exists for this place.')
+    return demoDelay(card)
+  }
+
   const query = new URLSearchParams()
   query.set('needs', needs.join(','))
   thresholdQuery(query, thresholds)
@@ -101,6 +122,8 @@ export async function getRequirements(
   thresholds?: ThresholdPreferences,
   signal?: AbortSignal
 ): Promise<RequirementsResponse> {
+  if (isDemoModeOn()) return demoDelay(DEMO_REQUIREMENTS_RESPONSE)
+
   const query = new URLSearchParams()
   query.set('needs', needs.join(','))
   thresholdQuery(query, thresholds)
@@ -117,6 +140,12 @@ export async function planJourney(payload: {
   needs: string[]
   thresholds?: ThresholdPreferences
 }): Promise<JourneyPlanResponse> {
+  if (isDemoModeOn()) {
+    const plan = demoGetJourneyPlan(payload.destination_place_id)
+    if (!plan) throw new Error('No demo journey data exists for this destination. Try one of the other demo places.')
+    return demoDelay(plan)
+  }
+
   const res = await fetch(`${API_BASE}/journeys/plan`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -129,6 +158,10 @@ export async function planJourney(payload: {
 }
 
 export async function submitUserReport(formData: FormData): Promise<{ report_id: string; message: string }> {
+  if (isDemoModeOn()) {
+    return demoDelay({ report_id: 'demo-report', message: 'Demo mode: this report was not actually sent anywhere.' })
+  }
+
   const res = await fetch(`${API_BASE}/reports`, {
     method: 'POST',
     body: formData
