@@ -1,126 +1,121 @@
-export interface PlaceSummary {
-  id: string
-  name: string
-  type: string
-  address: string
-  department?: string
-  phone?: string
-  hours?: string
-  latitude: number
-  longitude: number
-  distance_m?: number
-  overall_status?: string
-}
+import type { ThresholdPreferences } from './profile.ts'
+import type { EvidenceState } from './evidence.ts'
+import {
+  normalizeJourneyPlan,
+  normalizePlace,
+  normalizeReadinessCard,
+  normalizeRequirements,
+  type JourneyPlanResponse,
+  type PlaceSummary,
+  type ReadinessCardResponse,
+  type RequirementsResponse
+} from './normalize.ts'
 
-export interface ReadinessCardResponse {
-  place_id: string
-  name: string
-  place_type: string
-  address: string
-  phone?: string
-  latitude: number
-  longitude: number
-  overall_status: 'confirmed' | 'not_confirmed'
-  confidence_score: number
-  summary_text: string
-  features: Array<{
-    feature_id: string
-    feature_type: string
-    name: string
-    status: 'verified' | 'reported' | 'temporary_barrier' | 'barrier' | 'unknown'
-    label?: string
-    source?: string
-    observed_at?: string
-    age_days?: number
-    expires_at?: string
-    reason: string
-    limits: string
-    next_actions: Array<{
-      action_type: string
-      title: string
-      details: string
-      phone?: string
-    }>
-  }>
-}
-
-export interface JourneyPlanResponse {
-  destination_name: string
-  destination_address: string
-  destination_phone?: string
-  total_distance_m: number
-  overall_status: 'confirmed' | 'not_confirmed'
-  confidence_score: number
-  summary_text: string
-  limits_notice: string
-  active_needs: string[]
-  route_geometry: {
-    type: string
-    coordinates: number[][]
-  }
-  steps: Array<{
-    step_id: string
-    feature_id: string
-    feature_type: string
-    description: string
-    floor_level: number
-    is_critical: boolean
-    status: 'verified' | 'reported' | 'temporary_barrier' | 'barrier' | 'unknown'
-    label?: string
-    source?: string
-    observed_at?: string
-    age_days?: number
-    expires_at?: string
-    reason: string
-    next_actions: Array<{
-      action_type: string
-      title: string
-      details: string
-      phone?: string
-    }>
-  }>
-  next_actions: Array<{
-    action_type: string
-    title: string
-    details: string
-    phone?: string
-  }>
-}
+export type {
+  FeatureCard,
+  JourneyPlanResponse,
+  JourneyStep,
+  NextActionItem,
+  PlaceEvidenceSummary,
+  PlaceSummary,
+  ReadinessCardResponse,
+  Requirement,
+  RequirementsResponse,
+  StepStatus,
+  VerdictStatus
+} from './normalize.ts'
 
 const API_BASE = '/api/v1'
+
+/** FastAPI sends `detail` as a string, or as a list of validation problems. */
+export function errorMessage(body: unknown, fallback: string): string {
+  const detail = typeof body === 'object' && body !== null ? (body as { detail?: unknown }).detail : undefined
+  if (typeof detail === 'string' && detail) return detail
+  if (Array.isArray(detail)) {
+    const first = detail[0] as { msg?: unknown } | undefined
+    if (first && typeof first.msg === 'string') return first.msg
+  }
+  return fallback
+}
+
+async function readJson(res: Response): Promise<unknown> {
+  return res.json().catch(() => ({}))
+}
 
 export async function searchPlaces(params: {
   q?: string
   type?: string
   near?: string
   limit?: number
-}): Promise<PlaceSummary[]> {
+  evidence_state?: EvidenceState
+  fresh_days?: number
+}, signal?: AbortSignal): Promise<PlaceSummary[]> {
   const query = new URLSearchParams()
   if (params.q) query.set('q', params.q)
   if (params.type) query.set('type', params.type)
   if (params.near) query.set('near', params.near)
   if (params.limit) query.set('limit', String(params.limit))
+  if (params.evidence_state) query.set('evidence_state', params.evidence_state)
+  if (params.fresh_days) query.set('fresh_days', String(params.fresh_days))
 
-  const res = await fetch(`${API_BASE}/places?${query.toString()}`)
+  const res = await fetch(`${API_BASE}/places?${query.toString()}`, { signal })
   if (!res.ok) {
-    throw new Error(`Failed to search places: ${res.statusText}`)
+    throw new Error(errorMessage(await readJson(res), `Failed to search places (${res.status})`))
   }
-  return res.json()
+  const body = await res.json()
+  return Array.isArray(body) ? body.map(normalizePlace) : []
 }
 
-export async function getPlaceReadinessCard(placeId: string, needs: string[]): Promise<ReadinessCardResponse> {
-  const needsParam = needs.join(',') || 'step_free'
-  const res = await fetch(`${API_BASE}/places/${placeId}/readiness-card?needs=${encodeURIComponent(needsParam)}`)
+export async function getPlace(placeId: string, signal?: AbortSignal): Promise<PlaceSummary> {
+  const res = await fetch(`${API_BASE}/places/${encodeURIComponent(placeId)}`, { signal })
   if (!res.ok) {
-    throw new Error(`Failed to fetch readiness card: ${res.statusText}`)
+    throw new Error(res.status === 404 ? 'That place was not found.' : errorMessage(await readJson(res), `Failed to load place (${res.status})`))
   }
-  return res.json()
+  return normalizePlace(await res.json())
+}
+
+function thresholdQuery(query: URLSearchParams, thresholds?: ThresholdPreferences) {
+  if (!thresholds) return
+  for (const [key, value] of Object.entries(thresholds)) {
+    if (typeof value === 'number') query.set(key, String(value))
+  }
+}
+
+export async function getPlaceReadinessCard(
+  placeId: string,
+  needs: string[],
+  thresholds?: ThresholdPreferences
+): Promise<ReadinessCardResponse> {
+  const query = new URLSearchParams()
+  query.set('needs', needs.join(','))
+  thresholdQuery(query, thresholds)
+  const res = await fetch(`${API_BASE}/places/${encodeURIComponent(placeId)}/readiness-card?${query.toString()}`)
+  if (!res.ok) {
+    throw new Error(errorMessage(await readJson(res), `Failed to fetch readiness card (${res.status})`))
+  }
+  return normalizeReadinessCard(await res.json())
+}
+
+export async function getRequirements(
+  needs: string[],
+  thresholds?: ThresholdPreferences,
+  signal?: AbortSignal
+): Promise<RequirementsResponse> {
+  const query = new URLSearchParams()
+  query.set('needs', needs.join(','))
+  thresholdQuery(query, thresholds)
+  const res = await fetch(`${API_BASE}/needs/requirements?${query.toString()}`, { signal })
+  if (!res.ok) {
+    throw new Error(errorMessage(await readJson(res), `Failed to load requirements (${res.status})`))
+  }
+  return normalizeRequirements(await res.json())
 }
 
 export async function planJourney(payload: {
   origin: { latitude: number; longitude: number }
   destination_place_id: string
   needs: string[]
+  thresholds?: ThresholdPreferences
 }): Promise<JourneyPlanResponse> {
   const res = await fetch(`${API_BASE}/journeys/plan`, {
     method: 'POST',
@@ -128,10 +123,9 @@ export async function planJourney(payload: {
     body: JSON.stringify(payload)
   })
   if (!res.ok) {
-    const errorBody = await res.json().catch(() => ({}))
-    throw new Error(errorBody.detail || `Failed to plan journey: ${res.statusText}`)
+    throw new Error(errorMessage(await readJson(res), `Failed to plan journey (${res.status})`))
   }
-  return res.json()
+  return normalizeJourneyPlan(await res.json())
 }
 
 export async function submitUserReport(formData: FormData): Promise<{ report_id: string; message: string }> {
@@ -140,8 +134,10 @@ export async function submitUserReport(formData: FormData): Promise<{ report_id:
     body: formData
   })
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || `Failed to submit report: ${res.statusText}`)
+    if (res.status === 404 || res.status === 405) {
+      throw new Error('Public reporting is not available on this server yet, so nothing was sent.')
+    }
+    throw new Error(errorMessage(await readJson(res), `Failed to submit report (${res.status})`))
   }
   return res.json()
 }

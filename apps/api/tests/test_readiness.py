@@ -242,3 +242,171 @@ def test_all_verified_yields_confirmed_verdict(base_rules, now_time):
     assert verdict.status == JourneyVerdictStatus.CONFIRMED
     assert verdict.confidence_score == 1.0
     assert "confirmed" in verdict.summary_text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Honest handling of steps nothing was assessed for
+# ---------------------------------------------------------------------------
+
+def _verified(feature_id, key, value, now_time, days_ago=3):
+    return EvidenceRecord(
+        f"ev-{feature_id}-{key}", feature_id, key, value, "verified", "auditor",
+        now_time - timedelta(days=days_ago), now_time + timedelta(days=60)
+    )
+
+
+def test_step_without_applicable_rule_is_neutral_not_applicable(base_rules, now_time):
+    """A feature no requirement applies to is neutral: flagged not applicable, never 'evidence'."""
+    entrance = JourneyStep("s1", "feat-entrance-1", "entrance", "Main Entrance", is_critical=True)
+    signage = JourneyStep("s2", "feat-signage-1", "signage", "Notice board", is_critical=True)
+    evidence = {
+        "feat-entrance-1": [
+            _verified("feat-entrance-1", "step_count", 0, now_time),
+            _verified("feat-entrance-1", "door_width_cm", 95, now_time),
+        ]
+    }
+
+    verdict = evaluate_journey([entrance, signage], ["step_free"], base_rules, evidence, now_time)
+
+    assert verdict.step_results[0].applicable is True
+    assert verdict.step_results[1].applicable is False
+    assert verdict.step_results[1].label is None and verdict.step_results[1].source is None
+    assert verdict.status == JourneyVerdictStatus.CONFIRMED
+
+
+def test_neutral_steps_do_not_inflate_confidence(base_rules, now_time):
+    """Many un-assessed route steps must not make an unknown entrance look 'mostly confirmed'."""
+    entrance = JourneyStep("s0", "feat-entrance-1", "entrance", "Main Entrance", is_critical=True)
+    footpaths = [
+        JourneyStep(f"seg-{i}", f"seg-{i}", "unmapped_kind", f"Follow footpath {i}", is_critical=True)
+        for i in range(10)
+    ]
+
+    verdict = evaluate_journey([entrance] + footpaths, ["step_free"], base_rules, {}, now_time)
+
+    assert verdict.status == JourneyVerdictStatus.NOT_CONFIRMED
+    assert verdict.confidence_score == 0.0
+
+
+def test_no_applicable_rules_never_confirms(now_time):
+    """Needs without any evaluation rules cannot confirm a journey: absence of rules is not evidence."""
+    steps = [JourneyStep("s1", "feat-entrance-1", "entrance", "Main Entrance", is_critical=True)]
+
+    verdict = evaluate_journey(steps, ["cognitive"], [], {}, now_time)
+
+    assert verdict.status == JourneyVerdictStatus.NOT_CONFIRMED
+    assert verdict.confidence_score == 0.0
+    assert "accessible" not in verdict.summary_text.lower()
+    assert verdict.step_results[0].applicable is False
+
+
+# ---------------------------------------------------------------------------
+# Own thresholds
+# ---------------------------------------------------------------------------
+
+from app.services.readiness import (  # noqa: E402
+    CUSTOM_NEED_CODE,
+    apply_threshold_overrides,
+    describe_requirements,
+    thresholds_to_overrides,
+)
+
+
+def test_thresholds_to_overrides_ignores_unsupported_and_invalid_values():
+    overrides = thresholds_to_overrides({
+        "min_door_width_cm": 80,
+        "max_ramp_slope_pct": float("nan"),
+        "max_kerb_height_cm": True,
+        "full_profile": {"presets": ["wheelchair"]},
+        "name": "Asha",
+    })
+
+    assert {o.pref_key for o in overrides} == {"min_door_width_cm"}
+    assert all(o.threshold == 80.0 for o in overrides)
+    assert thresholds_to_overrides(None) == []
+    assert thresholds_to_overrides({}) == []
+
+
+def test_door_width_override_replaces_standard_threshold(base_rules, now_time):
+    """A person's own minimum door width replaces the published 90 cm for their needs."""
+    step = JourneyStep("s1", "feat-entrance-1", "entrance", "Main Entrance", is_critical=True)
+    evidence = {
+        "feat-entrance-1": [
+            _verified("feat-entrance-1", "step_count", 0, now_time),
+            _verified("feat-entrance-1", "door_width_cm", 82, now_time),
+        ]
+    }
+
+    standard = evaluate_journey([step], ["step_free"], base_rules, evidence, now_time)
+    assert standard.step_results[0].status == StepStatus.BARRIER  # 82 < 90
+
+    outcome = apply_threshold_overrides(base_rules, ["step_free"], thresholds_to_overrides({"min_door_width_cm": 80}))
+    custom = evaluate_journey([step], outcome.needs, outcome.rules, evidence, now_time)
+
+    assert custom.step_results[0].status == StepStatus.VERIFIED
+    assert outcome.applied_keys == ["min_door_width_cm"]
+    assert outcome.ignored_keys == []
+
+    requirements, unevaluated = describe_requirements(outcome.rules, outcome.needs)
+    door = next(r for r in requirements if r["attribute_key"] == "door_width_cm")
+    assert door["threshold"] == 80.0 and door["standard_threshold"] == 90 and door["custom"] is True
+    assert unevaluated == []
+
+
+def test_stricter_override_can_turn_a_pass_into_a_barrier(base_rules, now_time):
+    step = JourneyStep("s1", "feat-entrance-1", "entrance", "Main Entrance", is_critical=True)
+    evidence = {
+        "feat-entrance-1": [
+            _verified("feat-entrance-1", "step_count", 0, now_time),
+            _verified("feat-entrance-1", "door_width_cm", 95, now_time),
+        ]
+    }
+    outcome = apply_threshold_overrides(base_rules, ["step_free"], thresholds_to_overrides({"min_door_width_cm": 100}))
+
+    verdict = evaluate_journey([step], outcome.needs, outcome.rules, evidence, now_time)
+
+    assert verdict.step_results[0].status == StepStatus.BARRIER
+    assert verdict.status == JourneyVerdictStatus.NOT_CONFIRMED
+
+
+def test_adjust_threshold_without_a_matching_rule_is_ignored_not_invented(now_time):
+    """Door width only adjusts rules the selected needs activate; it never adds one."""
+    rules = [
+        NeedRuleDefinition(need_code="tactile", feature_type="entrance", attribute_key="tactile_paving", operator="eq", threshold=True),
+    ]
+
+    outcome = apply_threshold_overrides(rules, ["tactile"], thresholds_to_overrides({"min_door_width_cm": 75}))
+
+    assert outcome.rules == rules
+    assert outcome.needs == ["tactile"]
+    assert outcome.applied_keys == []
+    assert outcome.ignored_keys == ["min_door_width_cm"]
+
+
+def test_kerb_height_threshold_adds_a_custom_requirement(base_rules, now_time):
+    """Kerb height has no published rule: setting it adds one, evaluated against evidence."""
+    kerb = JourneyStep("s1", "feat-kerb-1", "kerb", "Crossing kerb", is_critical=True)
+    outcome = apply_threshold_overrides(base_rules, ["step_free"], thresholds_to_overrides({"max_kerb_height_cm": 2}))
+
+    assert CUSTOM_NEED_CODE in outcome.needs
+    assert outcome.applied_keys == ["max_kerb_height_cm"]
+
+    # No kerb height evidence -> unknown, not confirmed
+    unknown = evaluate_journey([kerb], outcome.needs, outcome.rules, {}, now_time)
+    assert unknown.step_results[0].status == StepStatus.UNKNOWN
+    assert unknown.status == JourneyVerdictStatus.NOT_CONFIRMED
+
+    evidence = {"feat-kerb-1": [
+        _verified("feat-kerb-1", "kerb_height_cm", 6, now_time),
+        _verified("feat-kerb-1", "kerb_type", "lowered", now_time),
+    ]}
+    too_high = evaluate_journey([kerb], outcome.needs, outcome.rules, evidence, now_time)
+    assert too_high.step_results[0].status == StepStatus.BARRIER
+
+
+def test_describe_requirements_lists_needs_without_rules(base_rules):
+    requirements, unevaluated = describe_requirements(base_rules, ["step_free", "cognitive", "step_free"])
+
+    assert unevaluated == ["cognitive"]
+    assert {r["need_code"] for r in requirements} == {"step_free"}
+    assert all(r["custom"] is False for r in requirements)

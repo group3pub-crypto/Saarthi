@@ -9,9 +9,18 @@ from geoalchemy2.functions import ST_X, ST_Y, ST_Distance, ST_SetSRID, ST_MakePo
 from app.database import get_db
 from app.models.place import Place, PlaceType
 from app.models.accessibility import Feature, Evidence, NeedRule
-from app.schemas.place import PlaceSummaryResponse, PlaceReadinessCardResponse, FeatureReadinessCard
+from app.schemas.place import (
+    PlaceSummaryResponse,
+    PlaceEvidenceSummary,
+    PlaceReadinessCardResponse,
+    FeatureReadinessCard,
+)
+from app.services.evidence_queries import load_place_evidence_summaries, place_evidence_criterion
 from app.services.readiness import (
     evaluate_journey,
+    apply_threshold_overrides,
+    describe_requirements,
+    thresholds_to_overrides,
     JourneyStep,
     NeedRuleDefinition,
     EvidenceRecord,
@@ -23,9 +32,18 @@ router = APIRouter(prefix="/api/v1/places", tags=["Places"])
 
 @router.get("", response_model=List[PlaceSummaryResponse])
 def search_places(
-    q: Optional[str] = Query(None, description="Text search by name or address"),
+    q: Optional[str] = Query(None, description="Text search by name, address or department"),
     type: Optional[PlaceType] = Query(None, description="Filter by place type"),
     near: Optional[str] = Query(None, description="Proximity search in format 'lat,lng'"),
+    evidence_state: Optional[str] = Query(
+        None,
+        pattern="^(known_barrier|verified|reported|unknown)$",
+        description="Filter by the evidence on file: known_barrier, verified, reported or unknown (no current evidence)"
+    ),
+    fresh_days: Optional[int] = Query(
+        None, ge=1, le=365,
+        description="Only places with a current observation made within this many days"
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db)
@@ -45,12 +63,22 @@ def search_places(
         ST_X(Place.geom).label("longitude"),
     )
 
+    now = datetime.now(timezone.utc)
+
     if q:
         search_filter = f"%{q.strip()}%"
-        query = query.filter((Place.name.ilike(search_filter)) | (Place.address.ilike(search_filter)))
+        query = query.filter(
+            (Place.name.ilike(search_filter))
+            | (Place.address.ilike(search_filter))
+            | (Place.department.ilike(search_filter))
+        )
 
     if type:
         query = query.filter(Place.type == type)
+
+    evidence_criterion = place_evidence_criterion(now, evidence_state, fresh_days)
+    if evidence_criterion is not None:
+        query = query.filter(evidence_criterion)
 
     if near:
         try:
@@ -58,6 +86,7 @@ def search_places(
             lat = float(lat_str.strip())
             lng = float(lng_str.strip())
             point = ST_SetSRID(ST_MakePoint(lng, lat), 4326)
+            query = query.add_columns(func.ST_DistanceSphere(Place.geom, point).label("distance_m"))
             query = query.order_by(ST_Distance(Place.geom, point))
         except ValueError:
             raise HTTPException(
@@ -69,8 +98,12 @@ def search_places(
 
     results = query.offset(offset).limit(limit).all()
 
+    summaries = load_place_evidence_summaries(db, [row.id for row in results], now)
+
     response = []
     for row in results:
+        summary = summaries.get(row.id)
+        distance_m = getattr(row, "distance_m", None)
         response.append(PlaceSummaryResponse(
             id=row.id,
             name=row.name,
@@ -82,15 +115,56 @@ def search_places(
             phone=row.phone,
             hours=row.hours,
             source=row.source,
-            ward_id=row.ward_id
+            ward_id=row.ward_id,
+            distance_m=round(float(distance_m), 1) if distance_m is not None else None,
+            evidence=PlaceEvidenceSummary(**vars(summary)) if summary is not None else None
         ))
     return response
+
+
+@router.get("/{place_id}", response_model=PlaceSummaryResponse)
+def get_place(place_id: uuid.UUID, db: Session = Depends(get_db)):
+    """One place with its evidence summary (used by deep links such as the journey planner)."""
+    row = db.query(
+        Place.id,
+        Place.name,
+        Place.type,
+        Place.address,
+        Place.department,
+        Place.phone,
+        Place.hours,
+        Place.source,
+        Place.ward_id,
+        ST_Y(Place.geom).label("latitude"),
+        ST_X(Place.geom).label("longitude"),
+    ).filter(Place.id == place_id).first()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Place not found")
+
+    summary = load_place_evidence_summaries(db, [row.id], datetime.now(timezone.utc)).get(row.id)
+    return PlaceSummaryResponse(
+        id=row.id,
+        name=row.name,
+        type=row.type,
+        address=row.address,
+        latitude=row.latitude,
+        longitude=row.longitude,
+        department=row.department,
+        phone=row.phone,
+        hours=row.hours,
+        source=row.source,
+        ward_id=row.ward_id,
+        evidence=PlaceEvidenceSummary(**vars(summary)) if summary is not None else None,
+    )
 
 
 @router.get("/{place_id}/readiness-card", response_model=PlaceReadinessCardResponse)
 def get_place_readiness_card(
     place_id: uuid.UUID,
     needs: str = Query("step_free", description="Comma-separated list of active need codes (e.g. 'step_free,tactile')"),
+    min_door_width_cm: Optional[float] = Query(None, ge=50, le=200, description="Own minimum door width, replacing the published value"),
+    max_ramp_slope_pct: Optional[float] = Query(None, ge=1, le=20, description="Own maximum ramp slope, replacing the published value"),
+    max_kerb_height_cm: Optional[float] = Query(None, ge=0, le=30, description="Own maximum kerb height; adds a kerb height requirement"),
     db: Session = Depends(get_db)
 ):
     """Retrieve the feature-by-feature accessibility readiness card for a specific place.
@@ -174,6 +248,17 @@ def get_place_readiness_card(
             status=ev.status.value
         ))
 
+    # Own numeric thresholds (anonymous numbers only) adjust the selected needs' rules
+    overrides = thresholds_to_overrides({
+        "min_door_width_cm": min_door_width_cm,
+        "max_ramp_slope_pct": max_ramp_slope_pct,
+        "max_kerb_height_cm": max_kerb_height_cm,
+    })
+    outcome = apply_threshold_overrides(pure_rules, need_codes, overrides)
+    pure_rules = outcome.rules
+    need_codes = outcome.needs
+    requirements, unevaluated_needs = describe_requirements(pure_rules, need_codes)
+
     now = datetime.now(timezone.utc)
     verdict = evaluate_journey(
         steps=steps,
@@ -191,6 +276,7 @@ def get_place_readiness_card(
             feature_name=next((s.description for s in steps if s.step_id == step_res.step_id), step_res.feature_type),
             floor_level=next((s.floor_level for s in steps if s.step_id == step_res.step_id), 0),
             status=step_res.status,
+            applicable=step_res.applicable,
             label=step_res.label,
             source=step_res.source,
             observed_at=step_res.observed_at,
@@ -221,5 +307,9 @@ def get_place_readiness_card(
         active_needs=need_codes,
         features=feature_cards,
         summary_text=verdict.summary_text,
-        limits_notice=verdict.limits_notice
+        limits_notice=verdict.limits_notice,
+        evaluated_at=now,
+        requirements=requirements,
+        unevaluated_needs=unevaluated_needs,
+        ignored_thresholds=outcome.ignored_keys
     )

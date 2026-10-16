@@ -16,35 +16,35 @@
   "presets": {
     "wheelchair": {
       "name": "Wheelchair / Mobility",
-      "desc": "Requires step-free entrances, ramps with slope ≤ 8%, lifts for multi-storey access, and door width ≥ 90 cm."
+      "desc": "Checks entrances, ramps, lifts and accessible toilets against step-free and wheelchair rules (ramp slope up to 8%, door width at least 90 cm unless you change them)."
     },
     "low_vision": {
       "name": "Low Vision / Blind",
-      "desc": "Requires tactile guidance paving, audio signals at crossings, high contrast signage, and obstacle-free paths."
+      "desc": "Checks for tactile guidance paving and audible crossing signals. Signage contrast and obstacle checks are not evaluated yet."
     },
     "hearing": {
       "name": "Hearing / Deaf",
-      "desc": "Requires visual signage, text/digital counters, and non-audio announcements."
+      "desc": "Checks the hearing-support features that have been audited. Visual signage and counters are not evaluated yet."
     },
     "cognitive": {
       "name": "Cognitive / Plain Language",
-      "desc": "Prefers short sentences, pictorial step-by-step navigation, and minimal sensory clutter."
+      "desc": "Saved as a support need, but SAARTHI has no measurable rules for it yet, so it cannot change a verdict."
     },
     "elderly": {
       "name": "Elderly / Senior Citizens",
-      "desc": "Requires step-free access, frequent resting benches, handrails on stairs, and low exertion paths."
+      "desc": "Checks step-free access and low-stamina rules."
     },
     "pregnant": {
       "name": "Pregnant Women",
-      "desc": "Avoids steep stairways, requires lift access and accessible rest points."
+      "desc": "Checks step-free access and low-stamina rules."
     },
     "low_stamina": {
       "name": "Low Stamina / Fatigue",
-      "desc": "Minimizes walking distances and avoids steep inclines."
+      "desc": "Checks low-stamina rules from audited features."
     },
     "caregiver": {
       "name": "Caregiver / Companion",
-      "desc": "Configures dual access settings and enables shareable journey passport tracking."
+      "desc": "Checks step-free access for the person you travel with."
     }
   },
   "status": {
@@ -87,13 +87,52 @@
   },
   "profile": {
     "title": "On-Device Access Profile",
-    "subtitle": "Stored strictly on your device (IndexedDB). Never sent to any server.",
+    "subtitle": "Saved only in this browser. Never uploaded.",
     "activeNeeds": "Active Need Constraints",
     "selectPresets": "Select Accessibility Presets",
     "customThresholds": "Custom Threshold Adjustments",
-    "save": "Save to Device",
-    "export": "Export Profile (JSON)",
-    "clear": "Clear Profile"
+    "save": "Save profile",
+    "export": "Export",
+    "clear": "Delete",
+    "closeLabel": "Close access profile",
+    "privacy": "Your needs and limits stay on this device. When you check a place, only the needs codes and any numeric limits you changed are sent, never the profile itself.",
+    "statusSaved": "Profile saved on this device",
+    "statusNotSaved": "Not saved yet: using a starting default",
+    "unsaved": "Unsaved changes",
+    "combineHint": "Choose every need that applies. They are combined.",
+    "informationalNote": "One or more selected needs have no measurable rules yet. They are saved with your profile but cannot change a verdict.",
+    "thresholdHint": "Leave these alone to use the published standard values. Only values you change are sent with a check.",
+    "rampLabel": "Steepest ramp you can use",
+    "doorLabel": "Narrowest door you can pass",
+    "kerbToggle": "Limit kerb height",
+    "kerbLabel": "Highest kerb you can manage",
+    "usingStandard": "Using the standard value ({{value}}).",
+    "customValue": "Your own value. The standard is {{value}}.",
+    "stepFreeToggle": "Always require step-free access",
+    "tactileToggle": "Require tactile guidance paving",
+    "audioToggle": "Require audible crossing signals",
+    "summaryTitle": "What will be checked",
+    "noEvaluableNeeds": "With these choices there is nothing SAARTHI can check, so no journey will be assessed. Choose at least one need with measurable rules.",
+    "evaluatedFor": "Checked for:",
+    "loadingRules": "Loading the rules…",
+    "rulesUnavailable": "The rule details could not be loaded. Your profile still works; try again later to see the full list.",
+    "customised": "your value",
+    "standard": "standard",
+    "unevaluated": "No rules exist yet for: {{needs}}. These cannot change a verdict.",
+    "ignoredThresholds": "Not applied because no matching rule is active: {{list}}.",
+    "saved": "Saved on this device.",
+    "deleted": "Profile deleted from this device.",
+    "exported": "Profile downloaded as a JSON file.",
+    "imported": "Profile imported and saved on this device.",
+    "importTooLarge": "This file is too large to be a SAARTHI profile.",
+    "import": "Import",
+    "importLabel": "Import a profile JSON file",
+    "confirmDeleteTitle": "Confirm delete",
+    "confirmDelete": "Delete the profile from this device?",
+    "confirmYes": "Delete",
+    "confirmNo": "Keep",
+    "discard": "Discard changes",
+    "close": "Close"
   },
   "report": {
     "title": "Report an Accessibility Issue",

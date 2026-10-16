@@ -27,32 +27,32 @@ export const StatusChip: React.FC<StatusChipProps> = ({
         return {
           icon: <CheckCircle2 size={16} aria-hidden="true" />,
           defaultText: t('status.verified'),
-          ariaLabel: 'Verified: On-site audit approved by certified verifier'
+          ariaLabel: 'Verified: confirmed on site by an auditor, and the record has not expired'
         }
       case 'reported':
         return {
           icon: <Clock size={16} aria-hidden="true" />,
           defaultText: t('status.reported'),
-          ariaLabel: 'Reported: Multiple independent citizen reports agree'
+          ariaLabel: 'Reported: someone reported this but no auditor has verified it yet'
         }
       case 'temporary_barrier':
         return {
           icon: <AlertTriangle size={16} aria-hidden="true" />,
           defaultText: t('status.temporary_barrier'),
-          ariaLabel: 'Temporary barrier: Active outage or obstruction with 7-day expiry'
+          ariaLabel: 'Temporary barrier: a short-term outage or obstruction that expires'
         }
       case 'barrier':
         return {
           icon: <XCircle size={16} aria-hidden="true" />,
           defaultText: t('status.barrier'),
-          ariaLabel: 'Known barrier: Fails required accessibility threshold'
+          ariaLabel: 'Known barrier: current evidence shows this does not meet the requirement'
         }
       case 'unknown':
       default:
         return {
           icon: <HelpCircle size={16} aria-hidden="true" />,
           defaultText: t('status.unknown'),
-          ariaLabel: 'Status unknown: No current evidence recorded; never assumed accessible'
+          ariaLabel: 'Unknown: no current evidence. Unknown is never treated as accessible'
         }
     }
   }
@@ -70,7 +70,7 @@ export const StatusChip: React.FC<StatusChipProps> = ({
       {config.icon}
       <span>{displayLabel}</span>
       {ageDays !== undefined && ageDays !== null && (
-        <span style={{ fontSize: '0.75rem', opacity: 0.85 }}>({ageDays}d ago)</span>
+        <span className="status-chip-age">({ageDays}d ago)</span>
       )}
     </span>
   )

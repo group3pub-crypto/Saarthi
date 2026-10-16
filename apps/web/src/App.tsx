@@ -12,13 +12,17 @@ import { SettingsPage } from './pages/SettingsPage'
 import { SharedPassportPage } from './pages/SharedPassportPage'
 import { AuditorPage } from './pages/AuditorPage'
 
+import { ProfileModalContext } from './context/ProfileModalContext'
+
 import './styles/index.css'
+import './styles/ui.css'
 
 export const AppContent: React.FC = () => {
   const { t } = useTranslation()
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
 
   return (
+    <ProfileModalContext.Provider value={{ openProfileModal: () => setIsProfileModalOpen(true) }}>
     <div className="app-container">
       {/* DESIGN.md signature: gradient-mesh wash behind the top of every page */}
       <div className="mesh-backdrop" aria-hidden="true" />
@@ -43,16 +47,12 @@ export const AppContent: React.FC = () => {
       {/* Accessible Footer with ODbL Attribution & Disclaimer */}
       <footer className="footer-bar" role="contentinfo">
         <div className="footer-inner">
-          <p style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
-            ⚠️ {t('app.disclaimer')}
-          </p>
-          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <span>{t('app.attribution')}</span>
-            <span>SAARTHI Access v1.0 • Built with WCAG 2.2 AA Standards</span>
-          </div>
+          <p className="footer-disclaimer">{t('app.disclaimer')}</p>
+          <p>{t('app.attribution')}</p>
         </div>
       </footer>
     </div>
+    </ProfileModalContext.Provider>
   )
 }
 

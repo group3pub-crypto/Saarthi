@@ -1,269 +1,292 @@
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Navigation, MapPin, AlertCircle } from 'lucide-react'
-import { planJourney, searchPlaces, type JourneyPlanResponse, type PlaceSummary } from '../services/api'
+import { AlertTriangle, Check, LocateFixed, MapPin, Navigation, RotateCcw, UserCheck } from 'lucide-react'
+import { getPlace, planJourney, type JourneyPlanResponse, type PlaceSummary } from '../services/api'
+import { needLabel } from '../services/requirements'
 import { MapLibreView } from '../components/map/MapLibreView'
+import { PlaceCombobox } from '../components/common/PlaceCombobox'
 import { JourneyPassportCard } from '../components/passport/JourneyPassportCard'
 import { GuidedNavigationHUD } from '../components/navigation/GuidedNavigationHUD'
 import { ReportIssueModal } from '../components/report/ReportIssueModal'
 import { useAccessProfile } from '../context/AccessProfileContext'
+import { useProfileModal } from '../context/ProfileModalContext'
+
+type Point = { latitude: number; longitude: number }
+type OriginMode = 'default' | 'gps' | 'place'
+
+/** Used only when the person has not chosen a start. It is labelled as such and can be replaced. */
+const DEFAULT_START: Point = { latitude: 18.5018, longitude: 73.858 }
+const DEFAULT_START_LABEL = 'Swargate, Pune (default start)'
 
 export const JourneyPlanPage: React.FC = () => {
   const [searchParams] = useSearchParams()
-  const { profile } = useAccessProfile()
+  const { profile, thresholds } = useAccessProfile()
+  const { openProfileModal } = useProfileModal()
 
   const destParam = searchParams.get('dest')
 
-  // Origin (defaults to Swargate / Pune Station area)
-  const [origin, setOrigin] = useState<{ latitude: number; longitude: number }>({
-    latitude: 18.5018,
-    longitude: 73.8580
-  })
+  const [originMode, setOriginMode] = useState<OriginMode>('default')
+  const [gpsPoint, setGpsPoint] = useState<Point | null>(null)
+  const [gpsStatus, setGpsStatus] = useState<'idle' | 'locating' | 'failed'>('idle')
+  const [gpsMessage, setGpsMessage] = useState('')
+  const [originPlace, setOriginPlace] = useState<PlaceSummary | null>(null)
 
-  // Destination search & selection
-  const [destQuery, setDestQuery] = useState('')
-  const [destResults, setDestResults] = useState<PlaceSummary[]>([])
-  const [selectedDestination, setSelectedDestination] = useState<PlaceSummary | null>(null)
+  const [destination, setDestination] = useState<PlaceSummary | null>(null)
+  const [destLoadError, setDestLoadError] = useState('')
 
-  // Journey plan result
   const [plan, setPlan] = useState<JourneyPlanResponse | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
-  // Guided navigation mode
   const [isNavigating, setIsNavigating] = useState(false)
-
-  // Report modal
   const [isReportOpen, setIsReportOpen] = useState(false)
   const [reportCommentDefault, setReportCommentDefault] = useState('')
 
-  // Load initial destination if dest query param is present
   useEffect(() => {
-    if (destParam) {
-      searchPlaces({ limit: 100 })
-        .then(places => {
-          const found = places.find(p => p.id === destParam)
-          if (found) {
-            setSelectedDestination(found)
-            setDestQuery(found.name)
-          }
-        })
-        .catch(() => {})
-    }
+    if (!destParam) return
+    const controller = new AbortController()
+    setDestLoadError('')
+    getPlace(destParam, controller.signal)
+      .then(setDestination)
+      .catch((err: Error) => {
+        if (controller.signal.aborted || err.name === 'AbortError') return
+        setDestLoadError(err.message)
+      })
+    return () => controller.abort()
   }, [destParam])
 
-  // Destination search query handler
+  const origin: Point = useMemo(() => {
+    if (originMode === 'gps' && gpsPoint) return gpsPoint
+    if (originMode === 'place' && originPlace) return { latitude: originPlace.latitude, longitude: originPlace.longitude }
+    return DEFAULT_START
+  }, [originMode, gpsPoint, originPlace])
+
+  const originLabel =
+    originMode === 'gps' && gpsPoint
+      ? 'Your current location'
+      : originMode === 'place' && originPlace
+        ? originPlace.name
+        : DEFAULT_START_LABEL
+
+  // Any change to the inputs makes an earlier result stale.
+  const needsKey = profile.activeNeedCodes.join(',')
+  const thresholdKey = JSON.stringify(thresholds)
   useEffect(() => {
-    if (!destQuery || selectedDestination?.name === destQuery) {
-      setDestResults([])
+    setPlan(null)
+    setIsNavigating(false)
+  }, [origin.latitude, origin.longitude, destination?.id, needsKey, thresholdKey])
+
+  const hasNeeds = profile.activeNeedCodes.length > 0
+  const canEvaluate = Boolean(destination) && hasNeeds && !isLoading
+
+  const useGps = () => {
+    if (!navigator.geolocation) {
+      setGpsStatus('failed')
+      setGpsMessage('This browser cannot share a location.')
       return
     }
-
-    const timer = setTimeout(() => {
-      searchPlaces({ q: destQuery, limit: 5 })
-        .then(res => setDestResults(res))
-        .catch(() => {})
-    }, 300)
-
-    return () => clearTimeout(timer)
-  }, [destQuery, selectedDestination])
+    setGpsStatus('locating')
+    setGpsMessage('')
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setGpsPoint({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
+        setOriginMode('gps')
+        setGpsStatus('idle')
+      },
+      () => {
+        setGpsStatus('failed')
+        setGpsMessage('Location was not shared. Search for a starting place instead, or keep the default start.')
+      },
+      { timeout: 10000 }
+    )
+  }
 
   const handlePlanJourney = async () => {
-    if (!selectedDestination) {
-      setErrorMsg('Please select a destination place.')
+    if (!destination) {
+      setErrorMsg('Choose a destination first.')
+      return
+    }
+    if (!hasNeeds) {
+      setErrorMsg('Choose at least one need in your access profile first.')
       return
     }
 
     setIsLoading(true)
     setErrorMsg('')
-
     try {
       const res = await planJourney({
-        origin: origin,
-        destination_place_id: selectedDestination.id,
-        needs: profile.activeNeedCodes
+        origin,
+        destination_place_id: destination.id,
+        needs: profile.activeNeedCodes,
+        thresholds
       })
       setPlan(res)
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Failed to calculate journey plan.')
+    } catch (err) {
+      setPlan(null)
+      setErrorMsg((err as Error).message || 'The journey could not be checked.')
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleHitBarrier = (stepDesc: string) => {
-    setReportCommentDefault(`Unflagged barrier encountered during journey navigation on: ${stepDesc}`)
+    setReportCommentDefault(`Barrier met during journey on: ${stepDesc}`)
     setIsReportOpen(true)
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      {/* Route Query Formulation Card */}
-      <section className="saarthi-card" aria-labelledby="plan-journey-heading">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <Navigation size={24} color="var(--accent-primary)" aria-hidden="true" />
-          <h1 id="plan-journey-heading" style={{ fontSize: '1.4rem' }}>
-            Plan Accessible Journey
-          </h1>
-        </div>
+    <div className="page plan-page">
+      <header className="page-head">
+        <p className="eyebrow">Journey planner</p>
+        <h1 id="plan-journey-heading" className="page-title">
+          Plan Accessible Journey
+        </h1>
+        <p className="text-secondary">
+          Check the evidence for each step between your start and the destination. Anything without current evidence is shown as unknown, never as accessible.
+        </p>
+      </header>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
-          {/* Origin Picker */}
-          <div>
-            <label htmlFor="origin-location" style={{ display: 'block', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.35rem' }}>
-              Origin (Starting Point)
-            </label>
-            <div style={{ position: 'relative' }}>
-              <input
-                id="origin-location"
-                type="text"
-                value={`Pune Central (${origin.latitude.toFixed(4)}, ${origin.longitude.toFixed(4)})`}
-                readOnly
-                style={{
-                  width: '100%',
-                  padding: '0.65rem 1rem',
-                  borderRadius: 'var(--radius-sm)',
-                  backgroundColor: 'var(--bg-elevated)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--border-subtle)'
+      <section className="saarthi-card plan-form" aria-labelledby="plan-journey-heading">
+        <ol className="plan-steps">
+          <li className="plan-step">
+            <span className="plan-step-number" aria-hidden="true">1</span>
+            <div className="plan-step-body">
+              <h2 className="plan-step-title">Where are you starting?</h2>
+              <p className="text-sm" id="origin-summary">
+                <MapPin size={14} aria-hidden="true" /> <strong>{originLabel}</strong>
+                {originMode === 'default' && <span className="text-muted"> · change it below</span>}
+              </p>
+              <div className="origin-actions">
+                <button type="button" className="btn btn-secondary btn-sm" onClick={useGps} disabled={gpsStatus === 'locating'}>
+                  <LocateFixed size={15} aria-hidden="true" />
+                  <span>{gpsStatus === 'locating' ? 'Locating…' : 'Use my location'}</span>
+                </button>
+                {originMode !== 'default' && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={() => {
+                      setOriginMode('default')
+                      setOriginPlace(null)
+                    }}
+                  >
+                    <RotateCcw size={14} aria-hidden="true" />
+                    <span>Use default start</span>
+                  </button>
+                )}
+              </div>
+              {gpsStatus === 'failed' && (
+                <p className="callout callout-note" role="status">
+                  <MapPin size={16} aria-hidden="true" />
+                  <span>{gpsMessage}</span>
+                </p>
+              )}
+              <PlaceCombobox
+                id="origin-search"
+                label="Or start from a place"
+                placeholder="Search a stop, station or building…"
+                selected={originPlace}
+                onSelect={p => {
+                  setOriginPlace(p)
+                  setOriginMode(p ? 'place' : 'default')
                 }}
               />
             </div>
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                if (navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition(pos => {
-                    setOrigin({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })
-                  })
-                }
-              }}
-              style={{ marginTop: '0.4rem', fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}
-            >
-              <MapPin size={14} aria-hidden="true" />
-              <span>Use Current GPS Location</span>
-            </button>
-          </div>
+          </li>
 
-          {/* Destination Selector */}
-          <div style={{ position: 'relative' }}>
-            <label htmlFor="destination-search" style={{ display: 'block', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.35rem' }}>
-              Destination (Hospital, Court, Bus Stop, Office)
-            </label>
-            <input
-              id="destination-search"
-              type="text"
-              value={destQuery}
-              onChange={e => {
-                setDestQuery(e.target.value)
-                setSelectedDestination(null)
-              }}
-              placeholder="Type destination name..."
-              style={{
-                width: '100%',
-                padding: '0.65rem 1rem',
-                borderRadius: 'var(--radius-sm)',
-                backgroundColor: 'var(--bg-surface)',
-                color: 'var(--text-primary)',
-                border: '2px solid var(--border-strong)'
-              }}
-              aria-autocomplete="list"
-            />
+          <li className="plan-step">
+            <span className="plan-step-number" aria-hidden="true">2</span>
+            <div className="plan-step-body">
+              <h2 className="plan-step-title">Where do you need to go?</h2>
+              <PlaceCombobox
+                id="destination-search"
+                label="Destination"
+                hint="Hospital, court, office, bus stop or other public service"
+                placeholder="Search for the place you are going to…"
+                selected={destination}
+                onSelect={setDestination}
+              />
+              {destLoadError && (
+                <p className="callout callout-warn" role="alert">
+                  <AlertTriangle size={16} aria-hidden="true" />
+                  <span>{destLoadError} Search for the place instead.</span>
+                </p>
+              )}
+            </div>
+          </li>
 
-            {/* Destination autocomplete results */}
-            {destResults.length > 0 && (
-              <ul
-                role="listbox"
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  backgroundColor: 'var(--bg-card)',
-                  border: '2px solid var(--accent-primary)',
-                  borderRadius: 'var(--radius-md)',
-                  zIndex: 200,
-                  listStyle: 'none',
-                  maxHeight: '220px',
-                  overflowY: 'auto',
-                  boxShadow: 'var(--shadow-lg)'
-                }}
-              >
-                {destResults.map(p => (
-                  <li key={p.id} role="option" aria-selected={selectedDestination?.id === p.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedDestination(p)
-                        setDestQuery(p.name)
-                        setDestResults([])
-                      }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'left',
-                        padding: '0.65rem',
-                        borderBottom: '1px solid var(--border-subtle)',
-                        display: 'flex',
-                        flexDirection: 'column'
-                      }}
-                    >
-                      <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{p.name}</span>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.address} ({p.type})</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
+          <li className="plan-step">
+            <span className="plan-step-number" aria-hidden="true">3</span>
+            <div className="plan-step-body">
+              <h2 className="plan-step-title">What does the journey need to work for?</h2>
+              {hasNeeds ? (
+                <p className="text-sm needs-line">
+                  {profile.activeNeedCodes.map(code => (
+                    <span key={code} className="pill pill-neutral">
+                      {needLabel(code)}
+                    </span>
+                  ))}
+                  {Object.keys(thresholds).length > 0 && <span className="pill pill-brand">your own limits</span>}
+                  {!profile.savedByUser && <span className="text-muted">(starting default, not saved)</span>}
+                </p>
+              ) : (
+                <p className="callout callout-warn">
+                  <AlertTriangle size={16} aria-hidden="true" />
+                  <span>No need with measurable rules is selected, so there is nothing SAARTHI can check.</span>
+                </p>
+              )}
+              <button type="button" className="btn btn-secondary btn-sm" onClick={openProfileModal}>
+                <UserCheck size={15} aria-hidden="true" />
+                <span>{hasNeeds ? 'Edit access profile' : 'Set up access profile'}</span>
+              </button>
+              <p className="text-muted text-sm">Your profile stays on this device. Only the need codes and any limits you changed are sent.</p>
+            </div>
+          </li>
+        </ol>
 
-        {/* Active Needs Info */}
-        <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
-            <span style={{ color: 'var(--text-muted)' }}>Evaluating Constraints:</span>
-            {profile.activeNeedCodes.map(code => (
-              <span key={code} style={{ background: 'var(--bg-elevated)', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
-                {code}
-              </span>
-            ))}
-          </div>
-
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={handlePlanJourney}
-            disabled={isLoading || !selectedDestination}
-            style={{ opacity: !selectedDestination ? 0.6 : 1 }}
-          >
-            {isLoading ? 'Calculating pgRouting Path...' : 'Evaluate Journey Readiness'}
+        <div className="plan-submit">
+          <button type="button" className="btn btn-primary btn-lg" onClick={handlePlanJourney} disabled={!canEvaluate}>
+            {isLoading ? 'Checking evidence…' : 'Check journey readiness'}
           </button>
+          {!destination && <span className="text-muted text-sm">Choose a destination to continue.</span>}
         </div>
 
         {errorMsg && (
-          <div role="alert" style={{ marginTop: '0.75rem', color: 'var(--status-barrier-text)', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
-            <AlertCircle size={18} aria-hidden="true" />
+          <p role="alert" className="callout callout-danger">
+            <AlertTriangle size={16} aria-hidden="true" />
             <span>{errorMsg}</span>
-          </div>
+          </p>
         )}
       </section>
 
-      {/* Main Map & Journey Passport Display */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
-        {/* Left: Map with Real Pedestrian Route LineString */}
-        <div style={{ height: '540px', position: 'sticky', top: '5rem' }}>
+      <div className="explore-layout plan-layout">
+        <div className="map-pane">
           <MapLibreView
-            center={selectedDestination ? [selectedDestination.longitude, selectedDestination.latitude] : [origin.longitude, origin.latitude]}
+            center={destination ? [destination.longitude, destination.latitude] : [origin.longitude, origin.latitude]}
             zoom={15}
             origin={origin}
-            destination={selectedDestination ? { latitude: selectedDestination.latitude, longitude: selectedDestination.longitude, name: selectedDestination.name } : undefined}
+            destination={destination ? { latitude: destination.latitude, longitude: destination.longitude, name: destination.name } : undefined}
             routeGeometry={plan?.route_geometry}
+            routeKind={plan?.route_kind}
           />
+          {plan && (
+            <p className="text-muted text-sm">
+              {plan.route_kind === 'pedestrian_network'
+                ? 'The purple line follows mapped walking paths.'
+                : 'The dashed line is a straight line between the points. It is not a walkable route.'}
+            </p>
+          )}
         </div>
 
-        {/* Right: Journey Readiness Passport */}
-        <div>
-          {plan ? (
+        <div className="results-pane" aria-live="polite" aria-busy={isLoading}>
+          {isLoading ? (
+            <div className="saarthi-card" aria-label="Checking the journey">
+              <div className="skeleton skeleton-line w-60" />
+              <div className="skeleton skeleton-block" />
+              <div className="skeleton skeleton-block" />
+              <div className="skeleton skeleton-block" />
+            </div>
+          ) : plan ? (
             <JourneyPassportCard
               plan={plan}
               onStartNavigation={() => setIsNavigating(true)}
@@ -274,71 +297,29 @@ export const JourneyPlanPage: React.FC = () => {
               onReportBarrier={handleHitBarrier}
             />
           ) : (
-            <div
-              className="saarthi-card"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '1rem',
-                padding: '2rem 1.5rem',
-                backgroundColor: 'var(--bg-surface)'
-              }}
-            >
-              <div style={{ textAlign: 'center' }}>
-                <Navigation size={42} color="var(--accent-primary)" style={{ margin: '0 auto 0.5rem' }} aria-hidden="true" />
-                <h2 style={{ fontSize: '1.25rem' }}>Journey Readiness Evaluation</h2>
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                  Evaluate every accessibility-critical pedestrian step from your starting point to your public destination.
-                </p>
-              </div>
-
-              {/* Guided Flow Instructions */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <div style={{ background: 'var(--bg-card)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)', display: 'block' }}>STEP 1</span>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Set Origin</span>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Use GPS or Pune Central</p>
-                </div>
-                <div style={{ background: 'var(--bg-card)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)', display: 'block' }}>STEP 2</span>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Choose Destination</span>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Hospital, Court, Transit</p>
-                </div>
-                <div style={{ background: 'var(--bg-card)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)', display: 'block' }}>STEP 3</span>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Access Needs</span>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>{profile.presets.length > 0 ? profile.presets.join(', ') : 'Default Needs'}</p>
-                </div>
-                <div style={{ background: 'var(--bg-card)', padding: '0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)', textAlign: 'center' }}>
-                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--accent-primary)', display: 'block' }}>STEP 4</span>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Verdict Passport</span>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Deterministic audit check</p>
-                </div>
-              </div>
-
-              <div style={{ padding: '0.75rem 1rem', background: 'var(--bg-elevated)', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', color: 'var(--text-muted)', textAlign: 'center' }}>
-                💡 Select a destination in the top search box and click <strong>Evaluate Journey Readiness</strong> to view real-world verified pedestrian steps.
-              </div>
+            <div className="saarthi-card empty-state">
+              <Navigation size={36} className="empty-state-icon" aria-hidden="true" />
+              <h2 className="empty-state-title">Your readiness passport appears here</h2>
+              <p className="empty-state-desc">
+                It lists each step of the journey with its evidence, how recent it is, and what is still unknown. Choose a destination and check readiness to
+                see it.
+              </p>
+              <p className="callout callout-success">
+                <Check size={16} aria-hidden="true" />
+                <span>Nothing is assumed: a step with no current evidence is shown as unknown.</span>
+              </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Guided Navigation HUD (Overlay) */}
-      {isNavigating && plan && (
-        <GuidedNavigationHUD
-          plan={plan}
-          onClose={() => setIsNavigating(false)}
-          onHitBarrier={handleHitBarrier}
-        />
-      )}
+      {isNavigating && plan && <GuidedNavigationHUD plan={plan} onClose={() => setIsNavigating(false)} onHitBarrier={handleHitBarrier} />}
 
-      {/* Report Barrier Modal */}
       <ReportIssueModal
         isOpen={isReportOpen}
         onClose={() => setIsReportOpen(false)}
-        placeId={selectedDestination?.id}
-        placeName={selectedDestination?.name}
+        placeId={destination?.id}
+        placeName={destination?.name}
         initialComment={reportCommentDefault}
       />
     </div>

@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.exc import OperationalError
 from app.config import settings
-from app.routers import places, journeys, auth, audits, admin
+from app.routers import places, journeys, auth, audits, admin, needs
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -35,6 +35,7 @@ app.include_router(audits.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(places.router)
 app.include_router(journeys.router)
+app.include_router(needs.router)
 
 # Root aliases
 app.include_router(auth.router)

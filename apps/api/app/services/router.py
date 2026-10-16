@@ -12,6 +12,9 @@ from app.models.accessibility import Feature, Evidence, NeedRule
 from app.schemas.journey import JourneyPlanResponse, JourneyStepDetail, Coordinate
 from app.services.readiness import (
     evaluate_journey,
+    apply_threshold_overrides,
+    describe_requirements,
+    thresholds_to_overrides,
     JourneyStep,
     NeedRuleDefinition,
     EvidenceRecord,
@@ -84,7 +87,8 @@ def plan_accessible_journey(
     origin: Coordinate,
     destination_place_id: uuid.UUID,
     needs: List[str],
-    now: Optional[datetime] = None
+    now: Optional[datetime] = None,
+    thresholds: Optional[Dict[str, Any]] = None
 ) -> JourneyPlanResponse:
     """Plan a multimodal accessible journey combining pgRouting pathfinding and pure readiness evaluation."""
     if now is None:
@@ -116,6 +120,7 @@ def plan_accessible_journey(
     route_coordinates: List[List[float]] = [[origin.longitude, origin.latitude]]
     total_distance_m = 0.0
     journey_steps: List[JourneyStep] = []
+    network_route_found = False
 
     # If routing network is available, route along segments
     if start_node_info and dest_node_info:
@@ -123,6 +128,7 @@ def plan_accessible_journey(
         dest_node, _ = dest_node_info
         
         path_segments = get_pgrouting_path(db, start_node, dest_node)
+        network_route_found = len(path_segments) > 0
         for idx, seg in enumerate(path_segments):
             seg_coords = seg["geojson"]["coordinates"]
             route_coordinates.extend(seg_coords)
@@ -188,6 +194,12 @@ def plan_accessible_journey(
         for r in db_rules
     ]
 
+    # Own numeric thresholds (anonymous numbers only) adjust the selected needs' rules
+    outcome = apply_threshold_overrides(pure_rules, needs, thresholds_to_overrides(thresholds))
+    pure_rules = outcome.rules
+    needs = outcome.needs
+    requirements, unevaluated_needs = describe_requirements(pure_rules, needs)
+
     # 5. Fetch Evidence for all steps
     feature_id_strings = list({s.feature_id for s in journey_steps})
     valid_uuids = []
@@ -252,6 +264,7 @@ def plan_accessible_journey(
             floor_level=step.floor_level,
             is_critical=step.is_critical,
             status=step_res.status,
+            applicable=step_res.applicable,
             label=step_res.label,
             source=step_res.source,
             observed_at=step_res.observed_at.isoformat() if step_res.observed_at else None,
@@ -286,5 +299,10 @@ def plan_accessible_journey(
         active_needs=needs,
         route_geometry=route_geo,
         steps=response_steps,
-        next_actions=unique_actions
+        next_actions=unique_actions,
+        evaluated_at=now,
+        requirements=requirements,
+        unevaluated_needs=unevaluated_needs,
+        ignored_thresholds=outcome.ignored_keys,
+        route_kind="pedestrian_network" if network_route_found else "straight_line"
     )

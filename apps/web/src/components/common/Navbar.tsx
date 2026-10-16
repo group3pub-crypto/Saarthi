@@ -62,6 +62,28 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenProfileModal }) => {
     i18n.changeLanguage(e.target.value)
   }
 
+  const THEME_LABEL: Record<string, string> = {
+    light: 'Light',
+    default_dark: 'Dark',
+    high_contrast: 'High contrast'
+  }
+
+  const needCount = profile.activeNeedCodes.length
+  const profileSummary = profile.savedByUser
+    ? `${profile.presets.length} need${profile.presets.length === 1 ? '' : 's'} saved`
+    : 'Not set up'
+
+  const navLink = (to: string, icon: React.ReactNode, label: string) => (
+    <Link
+      to={to}
+      className={`nav-link ${location.pathname === to ? 'active' : ''}`}
+      aria-current={location.pathname === to ? 'page' : undefined}
+    >
+      {icon}
+      <span>{label}</span>
+    </Link>
+  )
+
   return (
     <header className="header-bar" role="banner">
       <a href="#main-content" className="skip-link">
@@ -69,123 +91,73 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenProfileModal }) => {
       </a>
 
       <div className="nav-inner">
-        {/* Brand */}
-        <Link to="/" className="brand-link" aria-label="SAARTHI Access Home">
-          <Navigation className="brand-icon" size={24} aria-hidden="true" />
+        <Link to="/" className="brand-link" aria-label="SAARTHI Access home">
+          <Navigation className="brand-icon" size={22} aria-hidden="true" />
           <span>
-            SAARTHI <span style={{ color: 'var(--accent-primary)', fontWeight: 700 }}>Access</span>
+            SAARTHI <span className="brand-accent">Access</span>
           </span>
         </Link>
 
-        {/* Primary Navigation links */}
-        <nav id="primary-nav" aria-label="Primary navigation">
-          <ul className={`nav-links ${mobileOpen ? 'mobile-open' : ''}`}>
-            <li>
-              <Link
-                to="/"
-                className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}
-                aria-current={location.pathname === '/' ? 'page' : undefined}
-                onClick={() => setMobileOpen(false)}
-              >
-                <Search size={16} aria-hidden="true" />
-                <span>{t('nav.search')}</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/plan"
-                className={`nav-link ${location.pathname === '/plan' ? 'active' : ''}`}
-                aria-current={location.pathname === '/plan' ? 'page' : undefined}
-                onClick={() => setMobileOpen(false)}
-              >
-                <ShieldCheck size={16} aria-hidden="true" />
-                <span>{t('nav.plan')}</span>
-              </Link>
-            </li>
-            <li>
-              <button
-                type="button"
-                className="nav-link"
-                onClick={() => {
-                  setMobileOpen(false)
-                  onOpenProfileModal()
-                }}
-                aria-label={`Access Profile: ${profile.presets.length} presets active. Click to customize.`}
-              >
-                <UserCheck size={16} aria-hidden="true" />
-                <span>{t('nav.profile')}</span>
-                <span className="nav-badge" aria-label={`${profile.presets.length} active needs`}>
-                  {profile.presets.length}
-                </span>
-              </button>
-            </li>
-            <li>
-              <Link
-                to="/auditor"
-                className={`nav-link ${location.pathname === '/auditor' ? 'active' : ''}`}
-                aria-current={location.pathname === '/auditor' ? 'page' : undefined}
-                onClick={() => setMobileOpen(false)}
-              >
-                <ClipboardCheck size={16} aria-hidden="true" />
-                <span>Auditor</span>
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/settings"
-                className={`nav-link ${location.pathname === '/settings' ? 'active' : ''}`}
-                aria-current={location.pathname === '/settings' ? 'page' : undefined}
-                onClick={() => setMobileOpen(false)}
-              >
-                <Settings size={16} aria-hidden="true" />
-                <span>{t('nav.settings')}</span>
-              </Link>
-            </li>
+        <nav id="primary-nav" aria-label="Primary navigation" className={`nav-panel ${mobileOpen ? 'mobile-open' : ''}`}>
+          <ul className="nav-links nav-links-primary">
+            <li>{navLink('/', <Search size={16} aria-hidden="true" />, t('nav.search'))}</li>
+            <li>{navLink('/plan', <ShieldCheck size={16} aria-hidden="true" />, t('nav.plan'))}</li>
+          </ul>
+          <ul className="nav-links nav-links-secondary">
+            <li>{navLink('/auditor', <ClipboardCheck size={16} aria-hidden="true" />, 'Auditor')}</li>
+            <li>{navLink('/settings', <Settings size={16} aria-hidden="true" />, t('nav.settings'))}</li>
           </ul>
         </nav>
 
-        {/* Quick Accessibility & Locale Controls */}
-        <div className="quick-controls" aria-label="Quick accessibility settings">
-          {/* Language Switcher */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-            <Globe size={15} aria-hidden="true" style={{ color: 'var(--text-muted)' }} />
-            <select
-              className="lang-select"
-              value={i18n.language.slice(0, 2)}
-              onChange={handleLanguageChange}
-              aria-label="Change language (भाषा निवडा / भाषा बदलें)"
-            >
+        <div className="quick-controls">
+          <button
+            type="button"
+            className="profile-chip"
+            onClick={() => {
+              setMobileOpen(false)
+              onOpenProfileModal()
+            }}
+            aria-label={`${t('nav.profile')}: ${profileSummary}${needCount > 0 ? `, ${needCount} checked` : ''}. Open to edit.`}
+          >
+            <UserCheck size={16} aria-hidden="true" />
+            <span className="profile-chip-text">
+              <span className="profile-chip-title">{t('nav.profile')}</span>
+              <span className="profile-chip-sub">{profileSummary}</span>
+            </span>
+          </button>
+
+          <label className="lang-wrap">
+            <Globe size={15} aria-hidden="true" />
+            <span className="sr-only">Language</span>
+            <select className="lang-select" value={i18n.language.slice(0, 2)} onChange={handleLanguageChange}>
               <option value="en">EN</option>
               <option value="hi">हिन्दी</option>
               <option value="mr">मराठी</option>
             </select>
-          </div>
+          </label>
 
-          {/* Text Size Cycler */}
           <button
             type="button"
             className="icon-btn"
             onClick={cycleTextScale}
-            aria-label={`Current text scale: ${textScale} percent. Click to adjust.`}
-            title="Adjust text scale (100% / 125% / 150% / 200%)"
+            aria-label={`Text size ${textScale} percent. Activate to change.`}
+            title="Text size: 100% / 125% / 150% / 200%"
           >
-            <span>A± {textScale}%</span>
+            <span aria-hidden="true">A± {textScale}%</span>
           </button>
 
-          {/* Theme Mode Cycler */}
           <button
             type="button"
             className="icon-btn"
             onClick={cycleTheme}
-            aria-label={`Current theme: ${theme}. Click to cycle themes.`}
-            title="Toggle theme (Default / High Contrast / Light)"
+            aria-label={`Theme: ${THEME_LABEL[theme] ?? theme}. Activate to change.`}
+            title={`Theme: ${THEME_LABEL[theme] ?? theme}`}
           >
             {theme === 'high_contrast' && <Contrast size={16} aria-hidden="true" />}
             {theme === 'default_dark' && <Moon size={16} aria-hidden="true" />}
             {theme === 'light' && <Sun size={16} aria-hidden="true" />}
           </button>
 
-          {/* Mobile Navigation Toggle */}
           <button
             type="button"
             className="nav-mobile-toggle"

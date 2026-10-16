@@ -4,6 +4,7 @@ import type { Map, Marker } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { PlaceSummary } from '../../services/api'
 import { useAccessibility } from '../../context/AccessibilityContext'
+import { EVIDENCE_STATE_INFO, type EvidenceState } from '../../services/evidence'
 
 interface MapLibreViewProps {
   center?: [number, number] // [lng, lat]
@@ -15,6 +16,8 @@ interface MapLibreViewProps {
     type: string
     coordinates: number[][]
   }
+  /** A straight line is drawn dashed: it is not a walkable route. */
+  routeKind?: 'pedestrian_network' | 'straight_line'
   origin?: { latitude: number; longitude: number }
   destination?: { latitude: number; longitude: number; name?: string }
 }
@@ -26,6 +29,7 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
   selectedPlaceId,
   onSelectPlace,
   routeGeometry,
+  routeKind = 'pedestrian_network',
   origin,
   destination
 }) => {
@@ -133,7 +137,8 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
           paint: {
             'line-color': routeColor,
             'line-width': 6,
-            'line-opacity': 0.95
+            'line-opacity': 0.95,
+            ...(routeKind === 'straight_line' ? { 'line-dasharray': [1.5, 2] } : {})
           }
         })
 
@@ -151,7 +156,7 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
     } else {
       map.once('load', updateRoute)
     }
-  }, [routeGeometry, theme])
+  }, [routeGeometry, routeKind, theme])
 
   // Update Markers
   useEffect(() => {
@@ -166,13 +171,9 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
     if (origin) {
       const el = document.createElement('div')
       el.className = 'map-marker origin-marker'
-      el.setAttribute('aria-label', 'Origin Location')
-      el.style.backgroundColor = '#10b981'
-      el.style.width = '24px'
-      el.style.height = '24px'
-      el.style.borderRadius = '50%'
-      el.style.border = '3px solid #ffffff'
-      el.style.boxShadow = '0 2px 5px rgba(0,0,0,0.5)'
+      el.setAttribute('role', 'img')
+      el.setAttribute('aria-label', 'Start of journey')
+      el.textContent = 'A'
 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([origin.longitude, origin.latitude])
@@ -184,13 +185,9 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
     if (destination) {
       const el = document.createElement('div')
       el.className = 'map-marker destination-marker'
+      el.setAttribute('role', 'img')
       el.setAttribute('aria-label', `Destination: ${destination.name || 'Selected Place'}`)
-      el.style.backgroundColor = '#f43f5e'
-      el.style.width = '26px'
-      el.style.height = '26px'
-      el.style.borderRadius = '50%'
-      el.style.border = '3px solid #ffffff'
-      el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.6)'
+      el.textContent = 'B'
 
       const marker = new maplibregl.Marker({ element: el })
         .setLngLat([destination.longitude, destination.latitude])
@@ -198,25 +195,18 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
       markersRef.current.push(marker)
     }
 
-    // 3. Place Markers
+    // 3. Place Markers: coloured by evidence state, with a glyph so colour is never the only cue.
     places.forEach(place => {
       const isSelected = place.id === selectedPlaceId
+      const state: EvidenceState = place.evidence?.state ?? 'unknown'
+      const info = EVIDENCE_STATE_INFO[state]
       const el = document.createElement('div')
-      el.className = `map-place-marker ${isSelected ? 'selected' : ''}`
+      el.className = `map-place-marker state-${state}${isSelected ? ' selected' : ''}`
       el.setAttribute('role', 'button')
       el.setAttribute('tabindex', '0')
-      el.setAttribute('aria-label', `${place.name} (${place.type})`)
-      el.title = place.name
-
-      el.style.width = isSelected ? '34px' : '28px'
-      el.style.height = isSelected ? '34px' : '28px'
-      el.style.minWidth = '28px'
-      el.style.minHeight = '28px'
-      el.style.borderRadius = '50%'
-      el.style.backgroundColor = isSelected ? 'var(--accent-primary)' : '#665efd'
-      el.style.border = '2px solid #ffffff'
-      el.style.cursor = 'pointer'
-      el.style.transition = 'all 0.2s'
+      el.setAttribute('aria-label', `${place.name}, ${place.type.replace(/_/g, ' ')}. Evidence: ${info.label}`)
+      el.title = `${place.name}: ${info.label}`
+      el.textContent = info.glyph
 
       el.addEventListener('click', () => {
         if (onSelectPlace) onSelectPlace(place)
@@ -224,6 +214,7 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
 
       el.addEventListener('keydown', e => {
         if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
           if (onSelectPlace) onSelectPlace(place)
         }
       })
@@ -239,15 +230,7 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
   return (
     <div
       ref={mapContainerRef}
-      style={{
-        width: '100%',
-        height: '100%',
-        minHeight: '360px',
-        borderRadius: 'var(--radius-lg)',
-        overflow: 'hidden',
-        border: '1px solid var(--border-subtle)',
-        position: 'relative'
-      }}
+      className="map-canvas"
       role="region"
       aria-label="Interactive Map of Pune Public Services & Pedestrian Network"
     />

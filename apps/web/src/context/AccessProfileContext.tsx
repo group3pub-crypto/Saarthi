@@ -1,111 +1,106 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { clearAccessProfile, loadAccessProfile, saveAccessProfile } from '../services/idb'
 import {
+  createDefaultProfile,
+  createProfile,
+  parseImportedProfile,
+  serializeProfile,
+  thresholdPreferences,
   type AccessProfile,
-  loadAccessProfile,
-  saveAccessProfile,
-  clearAccessProfile,
-  DEFAULT_PROFILE
-} from '../services/idb'
+  type CustomThresholds,
+  type ThresholdPreferences
+} from '../services/profile'
+
+export interface ProfileDraft {
+  presets: string[]
+  customThresholds: CustomThresholds
+}
 
 interface AccessProfileContextType {
   profile: AccessProfile
   isLoading: boolean
-  togglePreset: (presetKey: string) => Promise<void>
-  updateCustomThresholds: (thresholds: Partial<AccessProfile['customThresholds']>) => Promise<void>
+  /** True once the person has saved a profile (the starting default does not count). */
+  hasSavedProfile: boolean
+  /** Plain numbers that may be sent with an evaluation request. Never the profile itself. */
+  thresholds: ThresholdPreferences
+  saveProfile: (draft: ProfileDraft) => Promise<void>
+  /** Removes the stored profile from this device and returns to the unsaved default. */
+  deleteProfile: () => Promise<void>
+  /** Kept for existing callers: identical to deleteProfile. */
   resetProfile: () => Promise<void>
   exportProfileJSON: () => string
-}
-
-const PRESET_NEED_MAPPINGS: Record<string, string[]> = {
-  wheelchair: ['step_free', 'wheelchair_door_width', 'lift_required_if_multistorey'],
-  low_vision: ['tactile_path', 'audio_signal', 'high_contrast_signage'],
-  hearing: ['visual_signage', 'digital_display'],
-  cognitive: ['plain_language', 'pictorial_steps'],
-  elderly: ['step_free', 'resting_points', 'handrails'],
-  pregnant: ['step_free', 'lift_required_if_multistorey', 'resting_points'],
-  low_stamina: ['low_incline', 'resting_points'],
-  caregiver: ['step_free', 'companion_access']
+  importProfileJSON: (text: string) => Promise<{ ok: true; warnings: string[] } | { ok: false; error: string }>
 }
 
 const AccessProfileContext = createContext<AccessProfileContextType | undefined>(undefined)
 
 export const AccessProfileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [profile, setProfile] = useState<AccessProfile>(DEFAULT_PROFILE)
+  const [profile, setProfile] = useState<AccessProfile>(() => createDefaultProfile())
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     loadAccessProfile()
       .then(p => {
-        setProfile(p)
-        setIsLoading(false)
+        if (!cancelled) setProfile(p)
       })
-      .catch(() => setIsLoading(false))
+      .catch(() => {
+        // Storage can be blocked (private windows); the app still works with the default.
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
-  const deriveNeedCodes = (presets: string[], thresholds: AccessProfile['customThresholds']) => {
-    const codes = new Set<string>()
-    for (const preset of presets) {
-      const mapped = PRESET_NEED_MAPPINGS[preset] || []
-      mapped.forEach(c => codes.add(c))
+  const saveProfile = useCallback(async (draft: ProfileDraft) => {
+    const next = createProfile(draft.presets, draft.customThresholds, true)
+    try {
+      setProfile(await saveAccessProfile(next))
+    } catch {
+      // Storage unavailable: keep it for this session only.
+      setProfile(next)
     }
-    if (thresholds.requireTactile) codes.add('tactile_path')
-    if (thresholds.requireAudioSignal) codes.add('audio_signal')
-    if (thresholds.requireLift) codes.add('lift_required_if_multistorey')
-    if (thresholds.maxStepCount === 0) codes.add('step_free')
-    return Array.from(codes)
-  }
+  }, [])
 
-  const togglePreset = async (presetKey: string) => {
-    const nextPresets = profile.presets.includes(presetKey)
-      ? profile.presets.filter(p => p !== presetKey)
-      : [...profile.presets, presetKey]
-
-    const nextCodes = deriveNeedCodes(nextPresets, profile.customThresholds)
-    const updated: AccessProfile = {
-      ...profile,
-      presets: nextPresets,
-      activeNeedCodes: nextCodes
+  const deleteProfile = useCallback(async () => {
+    try {
+      await clearAccessProfile()
+    } finally {
+      setProfile(createDefaultProfile())
     }
-    setProfile(updated)
-    await saveAccessProfile(updated)
-  }
+  }, [])
 
-  const updateCustomThresholds = async (thresholds: Partial<AccessProfile['customThresholds']>) => {
-    const mergedThresholds = { ...profile.customThresholds, ...thresholds }
-    const nextCodes = deriveNeedCodes(profile.presets, mergedThresholds)
-    const updated: AccessProfile = {
-      ...profile,
-      customThresholds: mergedThresholds,
-      activeNeedCodes: nextCodes
-    }
-    setProfile(updated)
-    await saveAccessProfile(updated)
-  }
-
-  const resetProfile = async () => {
-    await clearAccessProfile()
-    setProfile(DEFAULT_PROFILE)
-    await saveAccessProfile(DEFAULT_PROFILE)
-  }
-
-  const exportProfileJSON = () => {
-    return JSON.stringify(profile, null, 2)
-  }
-
-  return (
-    <AccessProfileContext.Provider
-      value={{
-        profile,
-        isLoading,
-        togglePreset,
-        updateCustomThresholds,
-        resetProfile,
-        exportProfileJSON
-      }}
-    >
-      {children}
-    </AccessProfileContext.Provider>
+  const importProfileJSON = useCallback(
+    async (text: string) => {
+      const result = parseImportedProfile(text)
+      if (!result.ok) return result
+      await saveProfile(result.profile)
+      return { ok: true as const, warnings: result.warnings }
+    },
+    [saveProfile]
   )
+
+  const exportProfileJSON = useCallback(() => serializeProfile(profile), [profile])
+
+  const value = useMemo<AccessProfileContextType>(
+    () => ({
+      profile,
+      isLoading,
+      hasSavedProfile: profile.savedByUser,
+      thresholds: thresholdPreferences(profile.customThresholds),
+      saveProfile,
+      deleteProfile,
+      resetProfile: deleteProfile,
+      exportProfileJSON,
+      importProfileJSON
+    }),
+    [profile, isLoading, saveProfile, deleteProfile, exportProfileJSON, importProfileJSON]
+  )
+
+  return <AccessProfileContext.Provider value={value}>{children}</AccessProfileContext.Provider>
 }
 
 export function useAccessProfile() {

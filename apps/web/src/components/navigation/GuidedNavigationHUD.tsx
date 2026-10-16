@@ -82,14 +82,14 @@ export const GuidedNavigationHUD: React.FC<GuidedNavigationHUDProps> = ({
             type="button"
             onClick={() => setAudioEnabled(!audioEnabled)}
             aria-label={audioEnabled ? 'Mute spoken audio directions' : 'Enable spoken audio directions'}
-            className="theme-toggle-btn"
+            className="icon-btn"
           >
             {audioEnabled ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="theme-toggle-btn"
+            className="icon-btn"
             aria-label="Exit guided navigation mode"
           >
             Exit

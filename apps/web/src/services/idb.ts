@@ -1,19 +1,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { PROFILE_ID, createDefaultProfile, normalizeProfile, type AccessProfile } from './profile.ts'
 
-export interface AccessProfile {
-  id: string
-  presets: string[] // e.g. ['wheelchair', 'low_vision']
-  customThresholds: {
-    maxRampSlopePct?: number
-    minDoorWidthCm?: number
-    maxStepCount?: number
-    requireLift?: boolean
-    requireTactile?: boolean
-    requireAudioSignal?: boolean
-  }
-  activeNeedCodes: string[] // e.g. ['step_free', 'tactile_path']
-  updatedAt: string
-}
+export type { AccessProfile } from './profile.ts'
 
 export interface OfflineAudit {
   id: string
@@ -70,39 +58,27 @@ export function getDB() {
   return dbPromise
 }
 
-export const DEFAULT_PROFILE: AccessProfile = {
-  id: 'current_user_profile',
-  presets: ['wheelchair'],
-  customThresholds: {
-    maxRampSlopePct: 8.0,
-    minDoorWidthCm: 90.0,
-    maxStepCount: 0,
-    requireLift: true,
-    requireTactile: false,
-    requireAudioSignal: false
-  },
-  activeNeedCodes: ['step_free'],
-  updatedAt: new Date().toISOString()
-}
-
+/**
+ * Load the stored profile, upgrading older versions. If nothing was ever saved the
+ * default is returned but NOT written: a default is not the person's choice, and
+ * deleting a profile must stay deleted.
+ */
 export async function loadAccessProfile(): Promise<AccessProfile> {
   const db = await getDB()
-  const profile = await db.get('profile', 'current_user_profile')
-  if (!profile) {
-    await saveAccessProfile(DEFAULT_PROFILE)
-    return DEFAULT_PROFILE
-  }
-  return profile
+  const stored = await db.get('profile', PROFILE_ID)
+  return stored ? normalizeProfile(stored) : createDefaultProfile()
 }
 
-export async function saveAccessProfile(profile: AccessProfile): Promise<void> {
+export async function saveAccessProfile(profile: AccessProfile): Promise<AccessProfile> {
   const db = await getDB()
-  await db.put('profile', { ...profile, updatedAt: new Date().toISOString() }, 'current_user_profile')
+  const toSave: AccessProfile = { ...profile, savedByUser: true, updatedAt: new Date().toISOString() }
+  await db.put('profile', toSave, PROFILE_ID)
+  return toSave
 }
 
 export async function clearAccessProfile(): Promise<void> {
   const db = await getDB()
-  await db.delete('profile', 'current_user_profile')
+  await db.delete('profile', PROFILE_ID)
 }
 
 export async function addRecentPlace(place: { id: string; name: string; type: string; address: string }): Promise<void> {

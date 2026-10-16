@@ -1,104 +1,77 @@
 import React, { useState } from 'react'
-import { Phone, Copy, Check, LifeBuoy, MapPin, Compass } from 'lucide-react'
+import { Check, Compass, Copy, LifeBuoy, MapPin, Phone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { NextActionItem } from '../../services/api'
 
 interface NextActionProps {
-  action: {
-    action_type: string
-    title: string
-    details: string
-    phone?: string
-  }
+  action: NextActionItem
   onActionClick?: (actionType: string) => void
 }
 
+/** Actions that are fully handled here: calling, or copying text for the person to send. */
 export const NextActionButton: React.FC<NextActionProps> = ({ action, onActionClick }) => {
   const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState<'ok' | 'failed' | null>(null)
 
-  const handleCopyScript = () => {
-    navigator.clipboard.writeText(action.details).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
-    })
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied('ok')
+    } catch {
+      setCopied('failed')
+    }
+    window.setTimeout(() => setCopied(null), 3000)
   }
 
-  const renderButtonContent = () => {
-    switch (action.action_type) {
-      case 'call_helpdesk':
-        return (
-          <a
-            href={action.phone ? `tel:${action.phone}` : '#'}
-            className="btn-secondary"
-            aria-label={`${t('actions.call_helpdesk')}: ${action.phone || 'Number unavailable'}`}
-            style={{ textDecoration: 'none' }}
-          >
-            <Phone size={18} aria-hidden="true" />
-            <span>{action.title || t('actions.call_helpdesk')}</span>
-          </a>
-        )
+  const copyText = action.action_type === 'call_ahead_script' ? action.script : action.message
+  const label = action.title || t(`actions.${action.action_type}`, { defaultValue: 'Next step' })
 
-      case 'call_ahead_script':
-        return (
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleCopyScript}
-            aria-label={`${t('actions.call_ahead_script')}: ${action.details}`}
-          >
-            {copied ? <Check size={18} color="#10b981" aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}
-            <span>{copied ? 'Script Copied to Clipboard!' : (action.title || t('actions.call_ahead_script'))}</span>
-            <span className="sr-only" aria-live="polite">
-              {copied ? 'Call ahead script copied to clipboard successfully' : ''}
-            </span>
-          </button>
-        )
+  let control: React.ReactNode
 
-      case 'request_assistance':
-        return (
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={() => onActionClick && onActionClick('request_assistance')}
-            aria-label={action.title || t('actions.request_assistance')}
-          >
-            <LifeBuoy size={18} aria-hidden="true" />
-            <span>{action.title || t('actions.request_assistance')}</span>
-          </button>
-        )
-
-      case 'alternative_entrance':
-        return (
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => onActionClick && onActionClick('alternative_entrance')}
-            aria-label={action.title || t('actions.alternative_entrance')}
-          >
-            <Compass size={18} aria-hidden="true" />
-            <span>{action.title || t('actions.alternative_entrance')}</span>
-          </button>
-        )
-
-      case 'nearest_alternative':
-      default:
-        return (
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={() => onActionClick && onActionClick(action.action_type)}
-            aria-label={action.title || t('actions.nearest_alternative')}
-          >
-            <MapPin size={18} aria-hidden="true" />
-            <span>{action.title || t('actions.nearest_alternative')}</span>
-          </button>
-        )
-    }
+  if (action.action_type === 'call_helpdesk') {
+    control = action.phone ? (
+      <a href={`tel:${action.phone}`} className="btn btn-secondary btn-sm" aria-label={`${label}: ${action.phone}`}>
+        <Phone size={16} aria-hidden="true" />
+        <span>{label}</span>
+      </a>
+    ) : (
+      <span className="text-muted text-sm">{label}: no phone number is on file.</span>
+    )
+  } else if (action.action_type === 'call_ahead_script' || action.action_type === 'request_assistance') {
+    const Icon = action.action_type === 'call_ahead_script' ? Copy : LifeBuoy
+    control = copyText ? (
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => copy(copyText)}>
+        {copied === 'ok' ? <Check size={16} aria-hidden="true" /> : <Icon size={16} aria-hidden="true" />}
+        <span>{copied === 'ok' ? t('actions.copied', { defaultValue: 'Copied' }) : label}</span>
+      </button>
+    ) : (
+      <span className="text-muted text-sm">{action.details}</span>
+    )
+  } else if (onActionClick) {
+    const Icon = action.action_type === 'alternative_entrance' ? Compass : MapPin
+    control = (
+      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onActionClick(action.action_type)}>
+        <Icon size={16} aria-hidden="true" />
+        <span>{label}</span>
+      </button>
+    )
+  } else {
+    // Nothing to run for this kind of action, so show it as guidance instead of a dead button.
+    control = (
+      <span className="text-sm">
+        <strong>{label}.</strong> {action.details}
+      </span>
+    )
   }
 
   return (
-    <div style={{ display: 'inline-block', margin: '0.25rem 0.25rem 0.25rem 0' }}>
-      {renderButtonContent()}
+    <div className="next-action">
+      {control}
+      <span className="sr-only" role="status" aria-live="polite">
+        {copied === 'ok' ? 'Copied to clipboard' : copied === 'failed' ? 'Could not copy' : ''}
+      </span>
+      {copied === 'failed' && <span className="text-sm text-danger">Copy is blocked in this browser. Select the text instead.</span>}
+      {copyText && <p className="next-action-preview text-muted text-sm">{copyText}</p>}
     </div>
   )
 }

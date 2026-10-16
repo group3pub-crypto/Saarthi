@@ -1,7 +1,8 @@
-from dataclasses import dataclass, field
+import math
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 
 class StepStatus(str, Enum):
@@ -36,6 +37,10 @@ class NeedRuleDefinition:
     operator: str  # 'eq', 'neq', 'lte', 'gte', 'in', 'not_in'
     threshold: Any
     critical: bool = True
+    # Set when a person's own threshold replaced (or added) this rule's value.
+    # `standard_threshold` keeps the published value so it can be shown next to it.
+    custom: bool = False
+    standard_threshold: Any = None
 
 
 @dataclass(frozen=True)
@@ -73,6 +78,9 @@ class StepEvaluationResult:
     reason: str
     limits: str
     next_actions: List[NextAction]
+    # False when no requirement of the selected needs applies to this feature,
+    # i.e. nothing was assessed. Such a step is neutral, never "verified evidence".
+    applicable: bool = True
 
 
 @dataclass(frozen=True)
@@ -98,6 +106,152 @@ DISCLAIMER_NOTICE = (
     "Decision support only. This verdict reflects current recorded observations "
     "and does not constitute legal or building compliance certification."
 )
+
+
+CUSTOM_NEED_CODE = "custom_threshold"
+
+# Numeric thresholds a person can set for themselves. Everything else keeps the
+# published rule values. pref_key -> [(feature_type, attribute_key, operator, mode)]
+#   mode "adjust":  only changes a rule that the selected needs already activate.
+#   mode "require": adds a rule when none exists (the person is asking for it).
+SUPPORTED_THRESHOLDS: Dict[str, List[Tuple[str, str, str, str]]] = {
+    "min_door_width_cm": [
+        ("entrance", "door_width_cm", "gte", "adjust"),
+        ("lift", "door_width_cm", "gte", "adjust"),
+        ("toilet", "door_width_cm", "gte", "adjust"),
+    ],
+    "max_ramp_slope_pct": [
+        ("ramp", "slope_pct", "lte", "adjust"),
+    ],
+    "max_kerb_height_cm": [
+        ("kerb", "kerb_height_cm", "lte", "require"),
+    ],
+}
+
+
+@dataclass(frozen=True)
+class ThresholdOverride:
+    pref_key: str
+    feature_type: str
+    attribute_key: str
+    operator: str  # 'lte' | 'gte'
+    threshold: float
+    mode: str = "adjust"  # 'adjust' | 'require'
+
+
+@dataclass(frozen=True)
+class OverrideOutcome:
+    rules: List[NeedRuleDefinition]
+    needs: List[str]
+    applied_keys: List[str]
+    ignored_keys: List[str]
+
+
+def thresholds_to_overrides(prefs: Optional[Mapping[str, Any]]) -> List[ThresholdOverride]:
+    """Turn anonymous numeric threshold preferences into rule overrides.
+
+    Only the supported numeric keys are read; anything else (including any
+    other profile data) is ignored, so nothing but plain numbers reaches here.
+    """
+    overrides: List[ThresholdOverride] = []
+    if not prefs:
+        return overrides
+    for pref_key, targets in SUPPORTED_THRESHOLDS.items():
+        value = prefs.get(pref_key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if not math.isfinite(value):
+            continue
+        for feature_type, attribute_key, operator, mode in targets:
+            overrides.append(ThresholdOverride(
+                pref_key=pref_key,
+                feature_type=feature_type,
+                attribute_key=attribute_key,
+                operator=operator,
+                threshold=float(value),
+                mode=mode,
+            ))
+    return overrides
+
+
+def apply_threshold_overrides(
+    rules: List[NeedRuleDefinition],
+    needs: List[str],
+    overrides: List[ThresholdOverride],
+) -> OverrideOutcome:
+    """Apply a person's own thresholds to the rules of their selected needs. Pure."""
+    out_rules = list(rules)
+    out_needs = list(needs)
+    applied: List[str] = []
+    attempted: List[str] = []
+
+    for override in overrides:
+        if override.pref_key not in attempted:
+            attempted.append(override.pref_key)
+        matched = False
+        for idx, rule in enumerate(out_rules):
+            if (
+                rule.need_code in out_needs
+                and rule.feature_type == override.feature_type
+                and rule.attribute_key == override.attribute_key
+                and rule.operator == override.operator
+            ):
+                matched = True
+                if rule.threshold != override.threshold:
+                    standard = rule.standard_threshold if rule.custom else rule.threshold
+                    out_rules[idx] = replace(
+                        rule,
+                        threshold=override.threshold,
+                        custom=True,
+                        standard_threshold=standard,
+                    )
+        if not matched and override.mode == "require":
+            out_rules.append(NeedRuleDefinition(
+                need_code=CUSTOM_NEED_CODE,
+                feature_type=override.feature_type,
+                attribute_key=override.attribute_key,
+                operator=override.operator,
+                threshold=override.threshold,
+                critical=True,
+                custom=True,
+            ))
+            if CUSTOM_NEED_CODE not in out_needs:
+                out_needs.append(CUSTOM_NEED_CODE)
+            matched = True
+        if matched and override.pref_key not in applied:
+            applied.append(override.pref_key)
+
+    ignored = [key for key in attempted if key not in applied]
+    return OverrideOutcome(rules=out_rules, needs=out_needs, applied_keys=applied, ignored_keys=ignored)
+
+
+def describe_requirements(
+    rules: List[NeedRuleDefinition],
+    needs: List[str],
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    """List the rules a verdict was evaluated against, and the needs that have none."""
+    unique_needs: List[str] = []
+    for need in needs:
+        if need not in unique_needs:
+            unique_needs.append(need)
+
+    active = [r for r in rules if r.need_code in unique_needs]
+    requirements = [
+        {
+            "need_code": r.need_code,
+            "feature_type": r.feature_type,
+            "attribute_key": r.attribute_key,
+            "operator": r.operator,
+            "threshold": r.threshold,
+            "standard_threshold": r.standard_threshold,
+            "critical": r.critical,
+            "custom": r.custom,
+        }
+        for r in active
+    ]
+    covered = {r.need_code for r in active}
+    unevaluated = [n for n in unique_needs if n not in covered]
+    return requirements, unevaluated
 
 
 def evaluate_operator(value: Any, operator: str, threshold: Any) -> bool:
@@ -180,6 +334,9 @@ def evaluate_journey(
 
     step_results: List[StepEvaluationResult] = []
     critical_steps_count = 0
+    # Steps that at least one active rule applies to. Only these can be confirmed:
+    # a step nothing was assessed for must not raise the confidence score.
+    applicable_critical_count = 0
     critical_steps_confirmed_count = 0
 
     for step in steps:
@@ -203,11 +360,13 @@ def evaluate_journey(
                 expires_at=None,
                 reason="No active accessibility constraints for this feature type.",
                 limits=DISCLAIMER_NOTICE,
-                next_actions=[]
+                next_actions=[],
+                applicable=False
             ))
-            if step.is_critical:
-                critical_steps_confirmed_count += 1
             continue
+
+        if step.is_critical:
+            applicable_critical_count += 1
 
         # Evaluate every matching rule; worst rule status wins for this step
         worst_status = StepStatus.VERIFIED
@@ -338,8 +497,17 @@ def evaluate_journey(
         confidence = 1.0
         overall_status = JourneyVerdictStatus.CONFIRMED
         summary_text = "Journey has no critical barriers under the selected profile."
+    elif applicable_critical_count == 0:
+        # Nothing could be assessed (e.g. the selected needs have no evaluation rules
+        # for any step). Absence of rules is not evidence, so it can never confirm.
+        confidence = 0.0
+        overall_status = JourneyVerdictStatus.NOT_CONFIRMED
+        summary_text = (
+            "Journey NOT CONFIRMED: no step could be assessed against the selected needs, "
+            "so there is no evidence to confirm."
+        )
     else:
-        confidence = round(critical_steps_confirmed_count / critical_steps_count, 2)
+        confidence = round(critical_steps_confirmed_count / applicable_critical_count, 2)
         if has_critical_failure:
             overall_status = JourneyVerdictStatus.NOT_CONFIRMED
             # ABSOLUTE RULE: Never return any text that says "accessible" when overall is not_confirmed

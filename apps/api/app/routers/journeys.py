@@ -21,7 +21,8 @@ def plan_journey_route(
             db=db,
             origin=request.origin,
             destination_place_id=request.destination_place_id,
-            needs=request.needs
+            needs=request.needs,
+            thresholds=request.thresholds.model_dump() if request.thresholds else None
         )
         return verdict
     except ValueError as e:

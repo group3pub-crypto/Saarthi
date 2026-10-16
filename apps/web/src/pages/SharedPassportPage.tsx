@@ -1,80 +1,62 @@
-import React, { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
-import { ShieldAlert, ArrowLeft } from 'lucide-react'
+import React, { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowLeft, FileUp, Info } from 'lucide-react'
 import { JourneyPassportCard } from '../components/passport/JourneyPassportCard'
 import type { JourneyPlanResponse } from '../services/api'
+import { parsePassportFile } from '../services/passport'
 
+/**
+ * SAARTHI does not host shared passport links. A passport is shared as a file
+ * (Export file on the passport) or as a text summary, and can be opened here.
+ */
 export const SharedPassportPage: React.FC = () => {
-  const { token } = useParams<{ token: string }>()
   const [passport, setPassport] = useState<JourneyPlanResponse | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [errorMsg, setErrorMsg] = useState('')
+  const [error, setError] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    // In production, GET /api/v1/passport/{token}
-    // For now, fetch from localStorage or mock token resolution
-    const cached = localStorage.getItem(`passport_${token}`)
-    if (cached) {
-      try {
-        setPassport(JSON.parse(cached))
-        setIsLoading(false)
-        return
-      } catch (e) {}
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const result = parsePassportFile(await file.text())
+    if (result.ok) {
+      setPassport(result.plan)
+      setError('')
+    } else {
+      setPassport(null)
+      setError(result.error)
     }
-
-    // Attempt fetch from API
-    fetch(`/api/v1/passport/${token}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Shared passport link has expired or is invalid.')
-        return res.json()
-      })
-      .then(data => {
-        setPassport(data)
-        setIsLoading(false)
-      })
-      .catch(err => {
-        setErrorMsg(err.message || 'Passport link expired.')
-        setIsLoading(false)
-      })
-  }, [token])
-
-  if (isLoading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '3rem' }}>
-        Verifying read-only companion passport link...
-      </div>
-    )
-  }
-
-  if (errorMsg || !passport) {
-    return (
-      <div className="saarthi-card" style={{ maxWidth: '600px', margin: '2rem auto', textAlign: 'center' }}>
-        <ShieldAlert size={48} color="var(--status-barrier-border)" style={{ margin: '0 auto 1rem' }} aria-hidden="true" />
-        <h1 style={{ fontSize: '1.25rem' }}>Passport Link Unavailable</h1>
-        <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-          {errorMsg || 'This read-only companion passport has expired or does not exist.'}
-        </p>
-        <Link to="/" className="btn-primary" style={{ display: 'inline-flex', marginTop: '1.5rem' }}>
-          <ArrowLeft size={18} aria-hidden="true" />
-          <span>Go to SAARTHI Home</span>
-        </Link>
-      </div>
-    )
   }
 
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Link to="/" className="btn-secondary" style={{ fontSize: '0.85rem' }}>
+    <div className="page narrow">
+      <div className="detail-actions">
+        <Link to="/" className="btn btn-secondary btn-sm">
           <ArrowLeft size={16} aria-hidden="true" />
-          <span>Back to App</span>
+          <span>Back to Explore</span>
         </Link>
-        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-          Shared Companion / Caregiver View
-        </span>
       </div>
 
-      <JourneyPassportCard plan={passport} />
+      <section className="saarthi-card">
+        <h1 className="page-title">Open a journey passport</h1>
+        <p className="text-secondary">
+          Online shared links are not available on this server. If someone sent you a passport file exported from SAARTHI, open it here to read it. It
+          is shown read-only and never uploaded.
+        </p>
+        <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={handleFile} aria-label="Choose a passport file" />
+        <button type="button" className="btn btn-primary" onClick={() => fileRef.current?.click()}>
+          <FileUp size={16} aria-hidden="true" />
+          <span>Choose passport file</span>
+        </button>
+        {error && (
+          <p className="callout callout-danger" role="alert">
+            <Info size={16} aria-hidden="true" />
+            <span>{error}</span>
+          </p>
+        )}
+      </section>
+
+      {passport && <JourneyPassportCard plan={passport} readOnly />}
     </div>
   )
 }

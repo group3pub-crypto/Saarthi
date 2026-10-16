@@ -29,7 +29,7 @@ export const SettingsPage: React.FC = () => {
     setHelperMode
   } = useAccessibility()
 
-  const { resetProfile, exportProfileJSON } = useAccessProfile()
+  const { resetProfile, exportProfileJSON, hasSavedProfile } = useAccessProfile()
   const [copiedNotification, setCopiedNotification] = useState(false)
   const [resetNotification, setResetNotification] = useState(false)
 
@@ -46,7 +46,7 @@ export const SettingsPage: React.FC = () => {
   }
 
   const handleReset = async () => {
-    if (window.confirm('Are you sure you want to delete your on-device access profile?')) {
+    if (window.confirm('Delete your on-device access profile? This cannot be undone.')) {
       await resetProfile()
       setResetNotification(true)
       setTimeout(() => setResetNotification(false), 3000)
@@ -207,6 +207,7 @@ export const SettingsPage: React.FC = () => {
             type="button"
             className="btn-secondary"
             onClick={handleExport}
+            disabled={!hasSavedProfile}
           >
             <Download size={18} aria-hidden="true" />
             <span>Export Profile (JSON)</span>
@@ -216,6 +217,7 @@ export const SettingsPage: React.FC = () => {
             type="button"
             className="btn-danger"
             onClick={handleReset}
+            disabled={!hasSavedProfile}
           >
             <Trash2 size={18} aria-hidden="true" />
             <span>Delete On-Device Profile</span>
@@ -231,7 +233,7 @@ export const SettingsPage: React.FC = () => {
 
         {resetNotification && (
           <div role="alert" style={{ marginTop: '0.75rem', color: 'var(--status-temp-barrier-text)', fontSize: '0.85rem' }}>
-            On-device profile deleted and reset to default preset.
+            On-device profile deleted. A starting default is used until you save a new profile.
           </div>
         )}
       </section>

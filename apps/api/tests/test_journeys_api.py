@@ -180,3 +180,62 @@ def test_journey_confirmed_when_all_critical_steps_verified(client, db_session):
     assert data["overall_status"] == "confirmed"
     assert data["confidence_score"] == 1.0
     assert "confirmed" in data["summary_text"].lower()
+
+
+def test_journey_plan_reports_requirements_thresholds_and_route_kind(client, db_session):
+    """The plan states which rules it used (incl. the person's own thresholds) and how the route was built."""
+    place = create_test_place(db_session, name="Journey Threshold Clinic", lat=18.520, lng=73.856)
+    entrance = create_test_feature(db_session, place.id, name="Main Entrance", feature_type=FeatureType.ENTRANCE)
+    auditor = create_test_user(db_session)
+    verifier = create_test_user(db_session)
+    now = datetime.now(timezone.utc)
+
+    create_test_evidence(
+        db_session, entrance.id, "step_count", 0,
+        label=EvidenceLabel.VERIFIED, source=EvidenceSource.AUDITOR,
+        observer_id=auditor.id, verifier_id=verifier.id,
+        observed_at=now - timedelta(days=5), expires_at=now + timedelta(days=85)
+    )
+    create_test_evidence(
+        db_session, entrance.id, "door_width_cm", 82,
+        label=EvidenceLabel.VERIFIED, source=EvidenceSource.AUDITOR,
+        observer_id=auditor.id, verifier_id=verifier.id,
+        observed_at=now - timedelta(days=5), expires_at=now + timedelta(days=85)
+    )
+    db_session.flush()
+
+    base_payload = {
+        "origin": {"latitude": 18.518, "longitude": 73.850},
+        "destination_place_id": str(place.id),
+        "needs": ["step_free"],
+    }
+
+    standard = client.post("/api/v1/journeys/plan", json=base_payload).json()
+    assert standard["overall_status"] == "not_confirmed"  # 82 cm is below the published 90 cm
+    assert standard["route_kind"] in ("pedestrian_network", "straight_line")
+    assert standard["evaluated_at"] is not None
+
+    custom = client.post(
+        "/api/v1/journeys/plan",
+        json={**base_payload, "thresholds": {"min_door_width_cm": 80}},
+    ).json()
+    assert custom["overall_status"] == "confirmed"
+    door = next(
+        r for r in custom["requirements"]
+        if r["feature_type"] == "entrance" and r["attribute_key"] == "door_width_cm"
+    )
+    assert door["threshold"] == 80 and door["custom"] is True and door["standard_threshold"] == 90
+    assert custom["ignored_thresholds"] == []
+
+
+def test_journey_plan_rejects_invalid_thresholds(client, db_session):
+    place = create_test_place(db_session, name="Journey Invalid Threshold Clinic")
+    db_session.flush()
+
+    res = client.post("/api/v1/journeys/plan", json={
+        "origin": {"latitude": 18.518, "longitude": 73.850},
+        "destination_place_id": str(place.id),
+        "needs": ["step_free"],
+        "thresholds": {"min_door_width_cm": 5},
+    })
+    assert res.status_code == 422

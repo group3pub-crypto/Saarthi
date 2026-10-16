@@ -1,7 +1,9 @@
 import React from 'react'
-import { CheckCircle2, AlertCircle, HelpCircle, Phone, Calendar, Shield, AlertTriangle, Flag } from 'lucide-react'
+import { AlertCircle, AlertTriangle, Calendar, CheckCircle2, Flag, HelpCircle, Info, Minus, Phone, Shield } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ReadinessCardResponse } from '../../services/api'
+import { describeAge, formatDate } from '../../services/evidence'
+import { describeIgnoredThresholds, featureLabel, groupRequirements, needLabel } from '../../services/requirements'
 import { StatusChip } from '../common/StatusChip'
 import { NextActionButton } from '../common/NextActionButton'
 
@@ -14,74 +16,66 @@ export const ServiceReadinessCard: React.FC<ServiceReadinessCardProps> = ({ card
   const { t } = useTranslation()
 
   const isConfirmed = card.overall_status === 'confirmed'
+  const applicable = card.features.filter(f => f.applicable)
+  const confirmed = applicable.filter(f => f.status === 'verified' || f.status === 'reported').length
+  const groups = groupRequirements(card.requirements)
+  const ignored = describeIgnoredThresholds(card.ignored_thresholds)
+  const evaluatedOn = formatDate(card.evaluated_at)
 
   return (
-    <article className="saarthi-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {/* Header Banner */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ flex: 1, minWidth: '220px' }}>
-          <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--accent-primary)', fontWeight: 700, letterSpacing: '0.04em' }}>
-            {t(`place.categories.${card.place_type}`) || card.place_type.replace('_', ' ')}
-          </span>
-          <h2 style={{ fontSize: '1.4rem', marginTop: '0.2rem' }}>{card.name}</h2>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{card.address}</p>
+    <article className="saarthi-card readiness-card">
+      <header className="readiness-head">
+        <div className="readiness-title">
+          <span className="eyebrow">{t(`place.categories.${card.place_type}`, { defaultValue: card.place_type.replace(/_/g, ' ') })}</span>
+          <h2>{card.name}</h2>
+          <p className="text-secondary">{card.address}</p>
           {card.phone && (
-            <a
-              href={`tel:${card.phone}`}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.4rem',
-                fontSize: '0.85rem',
-                color: 'var(--accent-primary)',
-                marginTop: '0.4rem',
-                textDecoration: 'none',
-                fontWeight: 600
-              }}
-              aria-label={`Call facility at ${card.phone}`}
-            >
+            <a href={`tel:${card.phone}`} className="inline-link" aria-label={`Call facility at ${card.phone}`}>
               <Phone size={15} aria-hidden="true" />
               <span>{card.phone}</span>
             </a>
           )}
         </div>
 
-        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-          <span
-            className={`status-chip ${isConfirmed ? 'verified' : 'unknown'}`}
-            style={{ fontSize: '0.875rem', padding: '0.4rem 0.85rem' }}
-          >
+        <div className="readiness-verdict">
+          <span className={`status-chip ${isConfirmed ? 'verified' : 'unknown'} status-chip-lg`}>
             {isConfirmed ? <CheckCircle2 size={18} aria-hidden="true" /> : <AlertCircle size={18} aria-hidden="true" />}
             <span>{isConfirmed ? 'Readiness Confirmed' : 'Not Confirmed'}</span>
           </span>
-          <div style={{ background: 'var(--bg-elevated)', padding: '0.35rem 0.65rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-subtle)' }}>
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Evidence Confidence: </span>
-            <span style={{ fontSize: '0.85rem', fontWeight: 800, color: isConfirmed ? 'var(--status-verified-text)' : 'var(--status-unknown-text)' }}>
-              {Math.round(card.confidence_score * 100)}%
-            </span>
-          </div>
+          {applicable.length > 0 ? (
+            <p className="text-muted text-sm">
+              {confirmed} of {applicable.length} applicable check{applicable.length === 1 ? '' : 's'} have current evidence
+            </p>
+          ) : (
+            <p className="text-muted text-sm">No check could be made</p>
+          )}
         </div>
-      </div>
+      </header>
 
-      {/* Summary */}
-      <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', background: 'var(--bg-elevated)', padding: '0.85rem 1rem', borderRadius: 'var(--radius-md)', borderLeft: `4px solid ${isConfirmed ? 'var(--status-verified-border)' : 'var(--status-unknown-border)'}` }}>
-        {card.summary_text}
-      </div>
+      <p className={`verdict-summary ${isConfirmed ? 'is-confirmed' : 'is-unconfirmed'}`}>{card.summary_text}</p>
 
-      {/* Feature Breakdown */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
-          <h3 style={{ fontSize: '1.05rem' }}>
+      {card.unevaluated_needs.length > 0 && (
+        <p className="callout callout-warn">
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>
+            No rules exist yet for {card.unevaluated_needs.map(needLabel).join(', ')}, so those needs did not affect this result.
+          </span>
+        </p>
+      )}
+      {ignored.length > 0 && (
+        <p className="callout callout-note">
+          <Info size={16} aria-hidden="true" />
+          <span>Your {ignored.join(', ')} limit was not applied because no matching rule is active.</span>
+        </p>
+      )}
+
+      <section aria-labelledby={`features-${card.place_id}`}>
+        <div className="section-header">
+          <h3 id={`features-${card.place_id}`} className="section-title">
             {t('place.features')} ({card.features.length})
           </h3>
           {onReportIssue && (
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={() => onReportIssue()}
-              style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem', color: 'var(--text-secondary)' }}
-              title="Report an unlisted barrier or outdated feature"
-            >
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onReportIssue()}>
               <Flag size={14} aria-hidden="true" />
               <span>Report Discrepancy</span>
             </button>
@@ -89,154 +83,96 @@ export const ServiceReadinessCard: React.FC<ServiceReadinessCardProps> = ({ card
         </div>
 
         {card.features.length === 0 ? (
-          <div
-            style={{
-              padding: '1.75rem 1.25rem',
-              backgroundColor: 'var(--status-unknown-bg)',
-              border: '1px dashed var(--status-unknown-border)',
-              borderRadius: 'var(--radius-md)',
-              textAlign: 'center',
-              color: 'var(--text-secondary)'
-            }}
-          >
-            <HelpCircle size={32} color="var(--status-unknown-border)" aria-hidden="true" style={{ margin: '0 auto 0.5rem' }} />
-            <p style={{ fontWeight: 700, fontSize: '0.95rem' }}>{t('place.no_audits')}</p>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '0.35rem', maxWidth: '420px', marginInline: 'auto' }}>
-              No verified accessibility features recorded yet for this facility. In accordance with SAARTHI Core Rules, unknown accessibility is never assumed accessible.
+          <div className="empty-state empty-state-warn">
+            <HelpCircle size={32} aria-hidden="true" className="empty-state-icon" />
+            <p className="empty-state-title">{t('place.no_audits')}</p>
+            <p className="empty-state-desc">
+              No accessibility features are recorded for this place yet. Unknown is never treated as accessible, so this place cannot be confirmed
+              until it is audited.
             </p>
-            {onReportIssue && (
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => onReportIssue()}
-                style={{ marginTop: '1rem', fontSize: '0.85rem' }}
-              >
-                Submit First Citizen Report
-              </button>
-            )}
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          <ul className="feature-list">
             {card.features.map(f => (
-              <div
-                key={f.feature_id}
-                style={{
-                  padding: '1rem',
-                  backgroundColor: 'var(--bg-surface)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '0.5rem'
-                }}
-              >
-                {/* Feature Title & Status */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '1rem' }}>{f.name}</span>
-                    <span style={{ fontSize: '0.75rem', background: 'var(--bg-elevated)', padding: '2px 7px', borderRadius: '4px', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
-                      {f.feature_type.replace('_', ' ')}
-                    </span>
+              <li key={f.feature_id} className={`feature-item${f.applicable ? '' : ' is-neutral'}`}>
+                <div className="feature-head">
+                  <div className="feature-name">
+                    <strong>{f.name}</strong>
+                    <span className="tag">{featureLabel(f.feature_type)}</span>
                   </div>
-
-                  <StatusChip
-                    status={f.status}
-                    label={f.label}
-                    ageDays={f.age_days}
-                    expiresAt={f.expires_at}
-                  />
+                  {f.applicable ? (
+                    <StatusChip status={f.status} label={f.label} ageDays={f.age_days} expiresAt={f.expires_at} />
+                  ) : (
+                    <span className="status-chip neutral" title="None of your selected needs has a rule for this kind of feature, so it does not affect the result.">
+                      <Minus size={16} aria-hidden="true" />
+                      <span>No requirement for your needs</span>
+                    </span>
+                  )}
                 </div>
 
-                {/* Reason */}
-                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
-                  {f.reason}
-                </p>
+                <p className="text-secondary text-sm">{f.reason}</p>
 
-                {/* Limitations notice if specified */}
-                {f.limits && (
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.4rem',
-                      fontSize: '0.8rem',
-                      color: 'var(--status-temp-barrier-text)',
-                      backgroundColor: 'var(--status-temp-barrier-bg)',
-                      padding: '0.4rem 0.65rem',
-                      borderRadius: 'var(--radius-xs)',
-                      border: '1px solid var(--status-temp-barrier-border)'
-                    }}
-                  >
-                    <AlertTriangle size={14} aria-hidden="true" />
-                    <span><strong>Limitation:</strong> {f.limits}</span>
-                  </div>
-                )}
-
-                {/* Evidence Metadata: Source, Timestamp/Observed, Expiry */}
-                <div
-                  style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    alignItems: 'center',
-                    gap: '1rem',
-                    fontSize: '0.75rem',
-                    color: 'var(--text-muted)',
-                    paddingTop: '0.4rem',
-                    borderTop: '1px solid var(--border-subtle)',
-                    marginTop: '0.2rem'
-                  }}
-                >
+                <div className="evidence-meta">
                   {f.source && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span className="evidence-meta-item">
                       <Shield size={12} aria-hidden="true" />
-                      <span>Source: <strong>{f.source.toUpperCase()}</strong></span>
+                      <span>Source: {f.source.replace(/_/g, ' ')}</span>
                     </span>
                   )}
                   {f.observed_at && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <span className="evidence-meta-item">
                       <Calendar size={12} aria-hidden="true" />
-                      <span>Observed: {new Date(f.observed_at).toLocaleDateString()}</span>
+                      <span>
+                        Observed {describeAge(f.observed_at)} ({formatDate(f.observed_at)})
+                      </span>
                     </span>
                   )}
-                  {f.expires_at && (
-                    <span>
-                      Expires: {new Date(f.expires_at).toLocaleDateString()}
-                    </span>
-                  )}
-
+                  {f.expires_at && <span>Valid until {formatDate(f.expires_at)}</span>}
                   {onReportIssue && (
-                    <button
-                      type="button"
-                      onClick={() => onReportIssue(f.feature_id)}
-                      style={{
-                        marginLeft: 'auto',
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--accent-primary)',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer',
-                        padding: '0 4px',
-                        textDecoration: 'underline'
-                      }}
-                    >
-                      Report Issue with this Feature
+                    <button type="button" className="link-btn" onClick={() => onReportIssue(f.feature_id)}>
+                      Report an issue with this feature
                     </button>
                   )}
                 </div>
 
-                {/* Next Actions */}
-                {f.next_actions && f.next_actions.length > 0 && (
-                  <div style={{ marginTop: '0.25rem' }}>
+                {f.next_actions.length > 0 && (
+                  <div className="next-actions">
                     {f.next_actions.map((act, i) => (
                       <NextActionButton key={i} action={act} />
                     ))}
                   </div>
                 )}
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
+
+      {groups.length > 0 && (
+        <details className="disclosure">
+          <summary>Rules this result was checked against</summary>
+          <ul className="requirement-list">
+            {groups.map(group => (
+              <li key={group.needCode}>
+                <strong>{group.label}</strong>
+                <ul>
+                  {group.rows.map((row, i) => (
+                    <li key={i}>
+                      {row.text}
+                      {row.customised && <span className="pill pill-brand">your value{row.standard ? ` (standard ${row.standard})` : ''}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <footer className="readiness-foot text-muted text-sm">
+        {evaluatedOn && <p>Checked on {evaluatedOn} against current evidence. Evidence expires, so check again before you travel.</p>}
+        {card.limits_notice && <p>{card.limits_notice}</p>}
+      </footer>
     </article>
   )
 }
