@@ -1,0 +1,7 @@
+name,type,address,lat,lng,phone,department,source
+Sassoon General Hospital,hospital,"Near Pune Railway Station, Station Road, Pune - 411001",18.5262,73.8745,"+91 20 2612 8000",Medical Education and Drugs Department,Government of Maharashtra Official Directory
+Pune Municipal Corporation Main Building,municipal_office,"Shivajinagar, Pune - 411005",18.5284,73.8524,"+91 20 2550 1000",Pune Municipal Corporation,PMC Official Portal
+District and Sessions Court Pune,court,"Shivajinagar, Pune - 411005",18.5308,73.8541,"+91 20 2553 4543",High Court of Bombay,eCourts India
+Pune Railway Station,transport_hub,"Station Road, Agarkar Nagar, Pune - 411001",18.5289,73.8744,"+91 20 2612 6575",Central Railway,Indian Railways
+Swargate Bus Stand,transport_hub,"Swargate, Pune - 411042",18.5018,73.8582,"+91 20 2444 0449",MSRTC,Maharashtra State Road Transport Corporation
+Aadhaar Seva Kendra Shivajinagar,aadhaar_centre,"Ghole Road, Shivajinagar, Pune - 411005",18.5247,73.8489,"+91 1947",UIDAI,UIDAI Official Portal

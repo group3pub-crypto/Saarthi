@@ -1,0 +1,117 @@
+{
+  "app": {
+    "title": "SAARTHI Access",
+    "tagline": "Public Journey Accessibility & Evidence Freshness Platform",
+    "disclaimer": "Decision support, not legal certification. Coverage depends on real-world audits and community reports. Unknown is never assumed accessible.",
+    "attribution": "Map data © OpenStreetMap contributors (ODbL) | Administrative data © Pune Municipal Corporation (OpenCity)"
+  },
+  "nav": {
+    "search": "Search Places",
+    "plan": "Plan Journey",
+    "profile": "Access Profile",
+    "settings": "Accessibility Settings",
+    "skipLink": "Skip to main content",
+    "reportIssue": "Report Issue"
+  },
+  "presets": {
+    "wheelchair": {
+      "name": "Wheelchair / Mobility",
+      "desc": "Requires step-free entrances, ramps with slope ≤ 8%, lifts for multi-storey access, and door width ≥ 90 cm."
+    },
+    "low_vision": {
+      "name": "Low Vision / Blind",
+      "desc": "Requires tactile guidance paving, audio signals at crossings, high contrast signage, and obstacle-free paths."
+    },
+    "hearing": {
+      "name": "Hearing / Deaf",
+      "desc": "Requires visual signage, text/digital counters, and non-audio announcements."
+    },
+    "cognitive": {
+      "name": "Cognitive / Plain Language",
+      "desc": "Prefers short sentences, pictorial step-by-step navigation, and minimal sensory clutter."
+    },
+    "elderly": {
+      "name": "Elderly / Senior Citizens",
+      "desc": "Requires step-free access, frequent resting benches, handrails on stairs, and low exertion paths."
+    },
+    "pregnant": {
+      "name": "Pregnant Women",
+      "desc": "Avoids steep stairways, requires lift access and accessible rest points."
+    },
+    "low_stamina": {
+      "name": "Low Stamina / Fatigue",
+      "desc": "Minimizes walking distances and avoids steep inclines."
+    },
+    "caregiver": {
+      "name": "Caregiver / Companion",
+      "desc": "Configures dual access settings and enables shareable journey passport tracking."
+    }
+  },
+  "status": {
+    "verified": "Verified Evidence",
+    "reported": "Citizen Reported",
+    "temporary_barrier": "Temporary Barrier",
+    "barrier": "Known Barrier",
+    "unknown": "Status Unknown"
+  },
+  "verdict": {
+    "confirmed": "Journey Confirmed Accessible",
+    "not_confirmed": "Journey Not Confirmed",
+    "confidence": "Evidence Freshness Score",
+    "unknown_notice": "Unknown is never accessible. One or more critical steps have missing or expired evidence."
+  },
+  "actions": {
+    "call_helpdesk": "Call Destination Helpdesk",
+    "call_ahead_script": "Copy Call-Ahead Script",
+    "request_assistance": "Request Station Assistance",
+    "alternative_entrance": "View Alternative Entrance",
+    "nearest_alternative": "Find Nearest Verified Alternative",
+    "start_navigation": "Start Guided Navigation",
+    "share_passport": "Share Passport Link",
+    "print_passport": "Print / Export PDF",
+    "report_barrier": "I Hit an Unflagged Barrier"
+  },
+  "place": {
+    "categories": {
+      "hospital": "Hospital & Health Centre",
+      "municipal_office": "Municipal & Govt Office",
+      "transport_hub": "Transport Hub & Railway",
+      "bus_stop": "PMPML Bus Stop",
+      "court": "Court & Judicial Centre",
+      "aadhaar_centre": "Aadhaar & Citizen Services",
+      "other": "Public Facility"
+    },
+    "readiness": "Service Readiness Card",
+    "features": "Audited Features",
+    "no_audits": "No accessibility audits yet for this place. Status: Unknown."
+  },
+  "profile": {
+    "title": "On-Device Access Profile",
+    "subtitle": "Stored strictly on your device (IndexedDB). Never sent to any server.",
+    "activeNeeds": "Active Need Constraints",
+    "selectPresets": "Select Accessibility Presets",
+    "customThresholds": "Custom Threshold Adjustments",
+    "save": "Save to Device",
+    "export": "Export Profile (JSON)",
+    "clear": "Clear Profile"
+  },
+  "report": {
+    "title": "Report an Accessibility Issue",
+    "anonymous_notice": "Your report is submitted anonymously. Photos will have all faces and vehicle registration plates blurred automatically on upload.",
+    "consent_checkbox": "I consent to uploading this photo for accessibility verification and agree that detected faces and license plates will be permanently blurred.",
+    "submit": "Submit Anonymous Report",
+    "feature_prompt": "Select affected feature or location",
+    "description_prompt": "Describe what you observed (e.g., broken lift, blocked ramp, raised kerb)"
+  },
+  "settings": {
+    "title": "Accessibility Preferences",
+    "theme": "Color Theme",
+    "theme_dark": "Dark Slate (Default)",
+    "theme_high_contrast": "High Contrast (Yellow / Black)",
+    "theme_light": "Light Mode",
+    "text_size": "Text Scaling",
+    "reduced_motion": "Reduced Motion",
+    "speech_directions": "Spoken Directions (Text-to-Speech)",
+    "helper_mode": "Helper Mode (Voice-First & Pictorial)"
+  }
+}
