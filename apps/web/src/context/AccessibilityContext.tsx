@@ -20,7 +20,7 @@ const AccessibilityContext = createContext<AccessibilityContextType | undefined>
 
 export const AccessibilityProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setTheme] = useState<ThemeMode>(() => {
-    return (localStorage.getItem('saarthi_theme') as ThemeMode) || 'default_dark'
+    return (localStorage.getItem('saarthi_theme') as ThemeMode) || 'light'
   })
   const [textScale, setTextScale] = useState<TextScale>(() => {
     return (localStorage.getItem('saarthi_text_scale') as TextScale) || '100'

@@ -20,6 +20,8 @@ export const AppContent: React.FC = () => {
 
   return (
     <div className="app-container">
+      {/* DESIGN.md signature: gradient-mesh wash behind the top of every page */}
+      <div className="mesh-backdrop" aria-hidden="true" />
       <Navbar onOpenProfileModal={() => setIsProfileModalOpen(true)} />
 
       <main id="main-content" className="main-content" role="main" tabIndex={-1}>

@@ -106,7 +106,7 @@ export const ReportIssueModal: React.FC<ReportIssueModalProps> = ({
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.75rem' }}>
           <div>
-            <h2 id="report-modal-title" style={{ fontSize: '1.25rem', fontWeight: 800 }}>
+            <h2 id="report-modal-title" style={{ fontSize: '1.25rem' }}>
               {t('report.title')}
             </h2>
             {placeName && (
@@ -155,7 +155,7 @@ export const ReportIssueModal: React.FC<ReportIssueModalProps> = ({
             }}
           >
             <Check size={36} style={{ margin: '0 auto 0.5rem' }} aria-hidden="true" />
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Thank You!</h3>
+            <h3 style={{ fontSize: '1.1rem' }}>Thank You!</h3>
             <p style={{ fontSize: '0.9rem', marginTop: '0.25rem' }}>{successMessage}</p>
           </div>
         ) : (

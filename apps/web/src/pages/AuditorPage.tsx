@@ -260,7 +260,7 @@ export const AuditorPage: React.FC = () => {
         <div className="saarthi-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div style={{ textAlign: 'center' }}>
             <ClipboardCheck size={42} style={{ color: 'var(--accent-primary)', marginBottom: '0.5rem' }} />
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Staff & Auditor Portal</h1>
+            <h1 style={{ fontSize: '1.5rem' }}>Staff & Auditor Portal</h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
               Sign in with your Auditor, Verifier, or Administrator credentials.
             </p>
@@ -353,7 +353,7 @@ export const AuditorPage: React.FC = () => {
       <div className="saarthi-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-            <h1 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Field Auditor & Verifier Console</h1>
+            <h1 style={{ fontSize: '1.4rem' }}>Field Auditor & Verifier Console</h1>
             <span
               style={{
                 fontSize: '0.75rem',
@@ -361,7 +361,7 @@ export const AuditorPage: React.FC = () => {
                 padding: '2px 8px',
                 borderRadius: '999px',
                 backgroundColor: 'var(--accent-primary)',
-                color: '#000',
+                color: 'var(--on-accent)',
                 fontWeight: 800
               }}
             >
@@ -500,7 +500,7 @@ export const AuditorPage: React.FC = () => {
       {activeTab === 'assignments' && (
         <section className="saarthi-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
+            <h2 style={{ fontSize: '1.2rem' }}>
               Priority Field Assignments in Pune ({assignments.length})
             </h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -551,7 +551,7 @@ export const AuditorPage: React.FC = () => {
                           Priority: {a.priority_score}
                         </span>
                       </div>
-                      <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{a.place_name}</h3>
+                      <h3 style={{ fontSize: '1.05rem' }}>{a.place_name}</h3>
                       <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>{a.address}</p>
                       <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
                         Features requiring audit: <strong>{a.unverified_features}</strong> / {a.total_features}
@@ -581,7 +581,7 @@ export const AuditorPage: React.FC = () => {
       {activeTab === 'checklist' && (
         <section className="saarthi-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Field Audit Checklist Form</h2>
+            <h2 style={{ fontSize: '1.2rem' }}>Field Audit Checklist Form</h2>
             <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
               {selectedAssignment
                 ? `Auditing: ${selectedAssignment.place_name} (${selectedAssignment.place_type})`
@@ -645,7 +645,7 @@ export const AuditorPage: React.FC = () => {
 
             {/* Dynamic Attribute Definition Fields */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', background: 'var(--bg-surface)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
+              <h3 style={{ fontSize: '1rem' }}>
                 Standard Accessibility Measurements ({featureType})
               </h3>
 
@@ -767,7 +767,7 @@ export const AuditorPage: React.FC = () => {
       {activeTab === 'verification' && isVerifierOrAdmin && (
         <section className="saarthi-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
+            <h2 style={{ fontSize: '1.2rem' }}>
               Independent Second-Person Verification Queue ({verificationQueue.length})
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -821,7 +821,7 @@ export const AuditorPage: React.FC = () => {
                         <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--accent-primary)', fontWeight: 700 }}>
                           {item.feature_type} • {item.place_name || 'Public Facility'}
                         </span>
-                        <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{item.feature_name}</h3>
+                        <h3 style={{ fontSize: '1.1rem' }}>{item.feature_name}</h3>
                         <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                           Collected by <strong>{item.observer_email || 'Auditor'}</strong> on {new Date(item.observed_at).toLocaleDateString()}
                         </p>
@@ -909,7 +909,7 @@ export const AuditorPage: React.FC = () => {
       {activeTab === 'reaudit' && (
         <section className="saarthi-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
+            <h2 style={{ fontSize: '1.2rem' }}>
               Evidence Freshness & Re-Audit Queue ({reauditQueue.length})
             </h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
@@ -951,7 +951,7 @@ export const AuditorPage: React.FC = () => {
                         Impact Score: {item.impact_score}
                       </span>
                     </div>
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{item.feature_name}</h3>
+                    <h3 style={{ fontSize: '1.05rem' }}>{item.feature_name}</h3>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                       {item.place_name || 'Public Facility'} • Attribute: <code>{item.attribute_key}</code>
                     </p>

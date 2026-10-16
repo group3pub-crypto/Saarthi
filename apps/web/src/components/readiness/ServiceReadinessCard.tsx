@@ -23,7 +23,7 @@ export const ServiceReadinessCard: React.FC<ServiceReadinessCardProps> = ({ card
           <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--accent-primary)', fontWeight: 700, letterSpacing: '0.04em' }}>
             {t(`place.categories.${card.place_type}`) || card.place_type.replace('_', ' ')}
           </span>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, marginTop: '0.2rem' }}>{card.name}</h2>
+          <h2 style={{ fontSize: '1.4rem', marginTop: '0.2rem' }}>{card.name}</h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{card.address}</p>
           {card.phone && (
             <a
@@ -71,7 +71,7 @@ export const ServiceReadinessCard: React.FC<ServiceReadinessCardProps> = ({ card
       {/* Feature Breakdown */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
-          <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>
+          <h3 style={{ fontSize: '1.05rem' }}>
             {t('place.features')} ({card.features.length})
           </h3>
           {onReportIssue && (

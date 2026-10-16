@@ -85,7 +85,7 @@ export const AccessProfileModal: React.FC<AccessProfileModalProps> = ({ isOpen, 
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Shield size={24} color="var(--accent-primary)" aria-hidden="true" />
-              <h2 id="access-profile-title" style={{ fontSize: '1.25rem', fontWeight: 800 }}>
+              <h2 id="access-profile-title" style={{ fontSize: '1.25rem' }}>
                 {t('profile.title')}
               </h2>
             </div>
@@ -175,7 +175,7 @@ export const AccessProfileModal: React.FC<AccessProfileModalProps> = ({ isOpen, 
                         {t(`presets.${key}.name`)}
                       </span>
                       {isActive && (
-                        <span style={{ background: 'var(--accent-primary)', color: '#000', borderRadius: '50%', padding: '2px' }}>
+                        <span style={{ background: 'var(--accent-primary)', color: 'var(--on-accent)', borderRadius: '50%', padding: '2px' }}>
                           <Check size={14} aria-hidden="true" />
                         </span>
                       )}

@@ -174,7 +174,7 @@ export const HomePage: React.FC = () => {
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
           <div>
-            <h1 style={{ fontSize: '1.6rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+            <h1 style={{ fontSize: '1.6rem' }}>
               {t('app.title')}
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.925rem', marginTop: '0.15rem' }}>
@@ -356,7 +356,7 @@ export const HomePage: React.FC = () => {
           ) : (
             <div className="saarthi-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '0.65rem' }}>
-                <h2 style={{ fontSize: '1.15rem', fontWeight: 800 }}>
+                <h2 style={{ fontSize: '1.15rem' }}>
                   Public Destinations ({places.length})
                 </h2>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -374,7 +374,7 @@ export const HomePage: React.FC = () => {
                 <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                   <div style={{ background: 'var(--status-unknown-bg)', border: '1px solid var(--status-unknown-border)', borderRadius: 'var(--radius-md)', padding: '1.25rem', maxWidth: '440px', margin: '0 auto' }}>
                     <Navigation size={32} color="var(--status-unknown-border)" style={{ margin: '0 auto 0.5rem' }} aria-hidden="true" />
-                    <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--status-unknown-text)' }}>Civic Database Service Offline</h3>
+                    <h3 style={{ fontSize: '1.05rem', color: 'var(--status-unknown-text)' }}>Civic Database Service Offline</h3>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.35rem', lineHeight: 1.45 }}>
                       Could not query public destinations. If running locally, please start the Postgres/PostGIS service via <code>run.bat</code> or Docker on port 5433.
                     </p>
@@ -395,7 +395,7 @@ export const HomePage: React.FC = () => {
               ) : places.length === 0 ? (
                 <div style={{ padding: '3rem 1.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                   <Navigation size={36} color="var(--border-strong)" style={{ margin: '0 auto 0.75rem' }} aria-hidden="true" />
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>No public places match this search</h3>
+                  <h3 style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>No public places match this search</h3>
                   <p style={{ fontSize: '0.875rem', marginTop: '0.35rem', maxWidth: '380px', marginInline: 'auto' }}>
                     {searchQuery ? `No records found for "${searchQuery}".` : 'No places available in this category.'} Try clearing filters or searching for Pune hospitals, bus stops, or municipal offices.
                   </p>
@@ -441,7 +441,7 @@ export const HomePage: React.FC = () => {
                             <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--accent-primary)', fontWeight: 700, letterSpacing: '0.04em' }}>
                               {place.type.replace('_', ' ')}
                             </span>
-                            <h3 style={{ fontSize: '0.98rem', fontWeight: 700, color: 'var(--text-primary)' }}>{place.name}</h3>
+                            <h3 style={{ fontSize: '0.98rem', color: 'var(--text-primary)' }}>{place.name}</h3>
                             <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>{place.address}</p>
                           </div>
                         </div>

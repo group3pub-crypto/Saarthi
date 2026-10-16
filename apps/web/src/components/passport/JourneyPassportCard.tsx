@@ -111,7 +111,7 @@ export const JourneyPassportCard: React.FC<JourneyPassportProps> = ({
               <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.06em', color: isConfirmed ? 'var(--status-verified-text)' : 'var(--status-barrier-text)' }}>
                 JOURNEY READINESS PASSPORT
               </span>
-              <h2 id="passport-heading" style={{ fontSize: '1.45rem', fontWeight: 800, lineHeight: 1.2 }}>
+              <h2 id="passport-heading" style={{ fontSize: '1.45rem', lineHeight: 1.2 }}>
                 {isConfirmed ? t('verdict.confirmed') : t('verdict.not_confirmed')}
               </h2>
             </div>
@@ -182,7 +182,7 @@ export const JourneyPassportCard: React.FC<JourneyPassportProps> = ({
         }}
       >
         <div>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{plan.destination_name}</h3>
+          <h3 style={{ fontSize: '1.2rem' }}>{plan.destination_name}</h3>
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{plan.destination_address}</p>
           <div style={{ display: 'flex', gap: '1rem', marginTop: '0.3rem', alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--accent-primary)', fontWeight: 600 }}>
@@ -228,7 +228,7 @@ export const JourneyPassportCard: React.FC<JourneyPassportProps> = ({
 
       {/* Signature Step Timeline */}
       <div>
-        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+        <h3 style={{ fontSize: '1.1rem', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
           <Layers size={18} color="var(--accent-primary)" aria-hidden="true" />
           <span>Route Timeline Verification ({plan.steps.length} Steps)</span>
         </h3>

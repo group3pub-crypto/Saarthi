@@ -58,7 +58,7 @@ export const SettingsPage: React.FC = () => {
       <header>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Settings size={28} color="var(--accent-primary)" aria-hidden="true" />
-          <h1 style={{ fontSize: '1.65rem', fontWeight: 800 }}>
+          <h1 style={{ fontSize: '1.65rem' }}>
             {t('settings.title')}
           </h1>
         </div>
@@ -69,7 +69,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Display & Contrast Settings */}
       <section className="saarthi-card" aria-labelledby="theme-heading">
-        <h2 id="theme-heading" style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <h2 id="theme-heading" style={{ fontSize: '1.15rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <Contrast size={20} aria-hidden="true" />
           <span>{t('settings.theme')}</span>
         </h2>
@@ -109,7 +109,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Typography & Scaling */}
       <section className="saarthi-card" aria-labelledby="typography-heading">
-        <h2 id="typography-heading" style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <h2 id="typography-heading" style={{ fontSize: '1.15rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <Type size={20} aria-hidden="true" />
           <span>{t('settings.text_size')} (WCAG Scaling up to 200%)</span>
         </h2>
@@ -131,7 +131,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Motion & Interaction Settings */}
       <section className="saarthi-card" aria-labelledby="motion-heading">
-        <h2 id="motion-heading" style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '1rem' }}>
+        <h2 id="motion-heading" style={{ fontSize: '1.15rem', marginBottom: '1rem' }}>
           Motion & Audio Cues
         </h2>
 
@@ -194,7 +194,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* On-Device Privacy Management */}
       <section className="saarthi-card" aria-labelledby="privacy-heading">
-        <h2 id="privacy-heading" style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <h2 id="privacy-heading" style={{ fontSize: '1.15rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
           <Shield size={20} color="var(--accent-primary)" aria-hidden="true" />
           <span>On-Device Privacy & Data Ownership</span>
         </h2>

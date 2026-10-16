@@ -50,7 +50,7 @@ export const SharedPassportPage: React.FC = () => {
     return (
       <div className="saarthi-card" style={{ maxWidth: '600px', margin: '2rem auto', textAlign: 'center' }}>
         <ShieldAlert size={48} color="var(--status-barrier-border)" style={{ margin: '0 auto 1rem' }} aria-hidden="true" />
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Passport Link Unavailable</h1>
+        <h1 style={{ fontSize: '1.25rem' }}>Passport Link Unavailable</h1>
         <p style={{ color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
           {errorMsg || 'This read-only companion passport has expired or does not exist.'}
         </p>

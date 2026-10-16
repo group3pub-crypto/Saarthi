@@ -102,7 +102,7 @@ export const JourneyPlanPage: React.FC = () => {
       <section className="saarthi-card" aria-labelledby="plan-journey-heading">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
           <Navigation size={24} color="var(--accent-primary)" aria-hidden="true" />
-          <h1 id="plan-journey-heading" style={{ fontSize: '1.4rem', fontWeight: 800 }}>
+          <h1 id="plan-journey-heading" style={{ fontSize: '1.4rem' }}>
             Plan Accessible Journey
           </h1>
         </div>
@@ -286,7 +286,7 @@ export const JourneyPlanPage: React.FC = () => {
             >
               <div style={{ textAlign: 'center' }}>
                 <Navigation size={42} color="var(--accent-primary)" style={{ margin: '0 auto 0.5rem' }} aria-hidden="true" />
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Journey Readiness Evaluation</h2>
+                <h2 style={{ fontSize: '1.25rem' }}>Journey Readiness Evaluation</h2>
                 <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
                   Evaluate every accessibility-critical pedestrian step from your starting point to your public destination.
                 </p>

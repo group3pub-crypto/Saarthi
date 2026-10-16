@@ -120,7 +120,7 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
           }
         })
 
-        const routeColor = theme === 'high_contrast' ? '#ffff00' : '#38bdf8'
+        const routeColor = theme === 'high_contrast' ? '#ffff00' : '#533afd'
 
         map.addLayer({
           id: layerId,
@@ -213,7 +213,7 @@ export const MapLibreView: React.FC<MapLibreViewProps> = ({
       el.style.minWidth = '28px'
       el.style.minHeight = '28px'
       el.style.borderRadius = '50%'
-      el.style.backgroundColor = isSelected ? 'var(--accent-primary)' : '#6366f1'
+      el.style.backgroundColor = isSelected ? 'var(--accent-primary)' : '#665efd'
       el.style.border = '2px solid #ffffff'
       el.style.cursor = 'pointer'
       el.style.transition = 'all 0.2s'

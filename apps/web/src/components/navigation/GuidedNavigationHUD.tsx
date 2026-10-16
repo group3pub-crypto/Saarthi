@@ -99,7 +99,7 @@ export const GuidedNavigationHUD: React.FC<GuidedNavigationHUDProps> = ({
 
       {/* Main Step Instruction */}
       <div style={{ backgroundColor: 'var(--bg-surface)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-        <h3 style={{ fontSize: '1.15rem', fontWeight: 800 }}>
+        <h3 style={{ fontSize: '1.15rem' }}>
           {currentStep ? currentStep.description : 'Approaching destination'}
         </h3>
         {currentStep && (
